@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<!-- -------- teste-ponte/index.html v1 -------- -->
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Teste da ponte</title>
+<style>
+  body { font-family: Arial, sans-serif; margin: 0; padding: 16px; background: #fff; color: #222; }
+  h1 { font-size: 20px; margin: 0 0 12px; }
+  input { width: 100%; box-sizing: border-box; padding: 10px; font-size: 14px; }
+  button { padding: 12px 16px; font-size: 16px; margin: 8px 8px 0 0; }
+  #passos div { padding: 10px; margin: 6px 0; border-radius: 6px; background: #eee; }
+  .ok { background: #d8f5d8 !important; }
+  .falha { background: #fbd9d9 !important; }
+  small { color: #666; }
+  iframe { display: none; }
+</style>
+</head>
+<body>
+<h1>Teste da ponte com o Apps Script</h1>
+
+<p><small>Endereço do app (o que termina em /exec):</small></p>
+<input id="url" placeholder="https://script.google.com/a/macros/kalmarglobal.com/s/.../exec">
+<button id="testar">Testar</button>
+<button id="abrir">Abrir o app numa aba (login)</button>
+
+<div id="passos"></div>
+<p><small id="navegador"></small></p>
+<p><small>teste-ponte v1</small></p>
+
+<script>
+// O endereço pode vir depois do # (não vai para o servidor do GitHub)
+// ou fica guardado deste aparelho da última vez.
+var campo = document.getElementById('url');
+var guardado = '';
+try { guardado = localStorage.getItem('ponte-url') || ''; } catch (e) {}
+campo.value = decodeURIComponent(location.hash.slice(1)) || guardado;
+document.getElementById('navegador').textContent = navigator.userAgent;
+
+var passos = document.getElementById('passos');
+var prazo = null;
+var chegou = {};
+
+function passo(texto, classe) {
+  var d = document.createElement('div');
+  d.textContent = texto;
+  if (classe) d.className = classe;
+  passos.appendChild(d);
+}
+
+window.addEventListener('message', function (ev) {
+  if (!/^https:\/\/[a-z0-9-]+-script\.googleusercontent\.com$/.test(ev.origin)) return;
+  var m = ev.data || {};
+  if (m.ponte === 'carregou' && !chegou.carregou) {
+    chegou.carregou = true;
+    passo('1. A página do Apps Script abriu dentro do app (login aceito no iframe).', 'ok');
+  } else if (m.ponte === 'dados') {
+    clearTimeout(prazo);
+    if (m.nome) passo('2. Leu a planilha: você é ' + m.nome + ', ' + m.ordens + ' O.S. na lista. FUNCIONOU.', 'ok');
+    else if (m.emailDesconhecido) passo('2. Leu a planilha, mas o e-mail ' + m.emailDesconhecido + ' não está na aba Tecnicos. A ponte funciona.', 'ok');
+    else passo('2. Leu a planilha, mas sem e-mail do usuário (' + m.ordens + ' O.S.). A ponte funciona; o e-mail é outro assunto.', 'ok');
+  } else if (m.ponte === 'erro') {
+    clearTimeout(prazo);
+    passo('2. O Apps Script respondeu com erro: ' + m.erro, 'falha');
+  }
+});
+
+document.getElementById('testar').onclick = function () {
+  var base = campo.value.trim();
+  if (!/^https:\/\/script\.google\.com\/.+\/exec$/.test(base)) {
+    passo('Cole o endereço que termina em /exec.', 'falha');
+    return;
+  }
+  try { localStorage.setItem('ponte-url', base); } catch (e) {}
+  passos.innerHTML = '';
+  chegou = {};
+  var velho = document.querySelector('iframe');
+  if (velho) velho.remove();
+  passo('Abrindo o Apps Script escondido...');
+
+  var f = document.createElement('iframe');
+  f.src = base + '?ponte=1&origem=' + encodeURIComponent(location.origin);
+  document.body.appendChild(f);
+
+  clearTimeout(prazo);
+  prazo = setTimeout(function () {
+    if (chegou.carregou) passo('Abriu, mas a planilha não respondeu em 30 s. Tente de novo.', 'falha');
+    else passo('NÃO abriu em 30 s. Provável: o navegador não manda o login do Google dentro do iframe, ' +
+               'ou o Google pediu login. Toque em "Abrir o app numa aba", entre com a conta Kalmar e teste de novo.', 'falha');
+  }, 30000);
+};
+
+document.getElementById('abrir').onclick = function () {
+  var base = campo.value.trim();
+  if (base) window.open(base, '_blank');
+};
+</script>
+</body>
+</html>
+<!-- -------- teste-ponte/index.html v1 -------- -->
