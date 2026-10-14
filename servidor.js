@@ -1,9 +1,10 @@
-// -------- servidor.js v3 --------
+// -------- servidor.js v4 --------
 /* ═══════════════════════════════════════════════════════════════
    SERVIDOR — a única porta do app para o servidor
 
-   As telas e a fila de envio só conhecem Servidor.inicio() e
-   Servidor.finalizar(). O que tem do outro lado mora só aqui. Três
+   As telas e a fila de envio só conhecem Servidor.inicio(),
+   Servidor.finalizar() e Servidor.apontar() (um toque do relógio da
+   O.S.). O que tem do outro lado mora só aqui. Três
    caminhos, nesta ordem:
      • gas:   a página servida pelo Apps Script (google.script.run);
      • ponte: o app instalado (GitHub Pages). O endereço /exec vem do
@@ -22,12 +23,16 @@
    Toda chamada tem prazo. Sinal que cai no meio deixa a chamada
    pendurada para sempre, e uma chamada pendurada travaria a fila de
    envio inteira atrás dela.
+
+   Erro de conexão (sem sinal, prazo estourado) sai com rede = true: a
+   fila sabe que não adianta tentar os outros itens agora.
    ═══════════════════════════════════════════════════════════════ */
 window.Servidor = (function () {
   'use strict';
 
   const PRAZO_INICIO    = 60 * 1000;
   const PRAZO_FINALIZAR = 120 * 1000;   // gera o PDF e manda e-mail: costuma levar 10–20 s
+  const PRAZO_APONTAR   = 60 * 1000;    // uma linha na planilha
   const PRAZO_PONTE     = 25 * 1000;    // para o iframe abrir e dizer "pronta"
 
   const temGas   = !!(window.google && google.script && google.script.run);
@@ -85,8 +90,10 @@ window.Servidor = (function () {
   // Sem sinal o iframe não abre; sem login Kalmar (ou com a sessão
   // vencida) o Google mostra a tela de login, que não abre em iframe.
   // Nos dois casos ele nunca diz "pronta".
+  const erroRede = msg => Object.assign(new Error(msg), { rede: true });
+
   function erroPonte() {
-    if (navigator.onLine === false) return new Error('Sem sinal.');
+    if (navigator.onLine === false) return erroRede('Sem sinal.');
     const erro = new Error('Não consegui entrar no servidor com a sua conta Kalmar.');
     erro.tipo = 'login';
     return erro;
@@ -124,7 +131,7 @@ window.Servidor = (function () {
       const timer = setTimeout(() => {
         esperando.delete(id);
         fecharPonte(p);   // pode ter morrido: na próxima, abre outra
-        falha(new Error('O servidor não respondeu a tempo.'));
+        falha(erroRede('O servidor não respondeu a tempo.'));
       }, prazo);
       esperando.set(id, {
         ok:    d => { clearTimeout(timer); ok(d); },
@@ -137,7 +144,7 @@ window.Servidor = (function () {
   function comPrazo(promessa, ms) {
     let timer = 0;
     const estourou = new Promise((ok, falha) => {
-      timer = setTimeout(() => falha(new Error('O servidor não respondeu a tempo.')), ms);
+      timer = setTimeout(() => falha(erroRede('O servidor não respondeu a tempo.')), ms);
     });
     return Promise.race([promessa, estourou]).finally(() => clearTimeout(timer));
   }
@@ -145,11 +152,13 @@ window.Servidor = (function () {
   const semServidor = () => Promise.reject(new Error('Este app está sem servidor configurado (falta o config.js).'));
 
   const base = {
-    gas:    { inicio: () => chamarGas('apiInicio'), finalizar: r => chamarGas('apiFinalizar', r) },
+    gas:    { inicio: () => chamarGas('apiInicio'), finalizar: r => chamarGas('apiFinalizar', r),
+              apontar: t => chamarGas('apiApontar', t) },
     ponte:  { inicio: () => chamarPonte('inicio', [], PRAZO_INICIO),
-              finalizar: r => chamarPonte('finalizar', [r], PRAZO_FINALIZAR) },
+              finalizar: r => chamarPonte('finalizar', [r], PRAZO_FINALIZAR),
+              apontar: t => chamarPonte('apontar', [t], PRAZO_APONTAR) },
     local:  window.API_LOCAL,
-    nenhum: { inicio: semServidor, finalizar: semServidor }
+    nenhum: { inicio: semServidor, finalizar: semServidor, apontar: semServidor }
   }[modo];
 
   return {
@@ -158,7 +167,8 @@ window.Servidor = (function () {
     // onde o técnico entra com a conta Kalmar quando a ponte não abre
     urlEntrar: modo === 'ponte' ? urlPonte : '',
     inicio:    () => comPrazo(base.inicio(), PRAZO_INICIO + PRAZO_PONTE),
-    finalizar: r  => comPrazo(base.finalizar(r), PRAZO_FINALIZAR + PRAZO_PONTE)
+    finalizar: r  => comPrazo(base.finalizar(r), PRAZO_FINALIZAR + PRAZO_PONTE),
+    apontar:   t  => comPrazo(base.apontar(t), PRAZO_APONTAR + PRAZO_PONTE)
   };
 })();
-// -------- servidor.js v3 --------
+// -------- servidor.js v4 --------

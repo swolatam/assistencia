@@ -1,4 +1,4 @@
-// -------- rat.js v3 --------
+// -------- rat.js v4 --------
 /* ═══════════════════════════════════════════════════════════════
    ASSISTÊNCIA TÉCNICA — lógica da página (as telas)
 
@@ -9,8 +9,15 @@
      servidor.js  a única porta para o servidor (Servidor)
      armazem.js   o que fica guardado no aparelho (Armazem)
      fila.js      a fila de envio (Fila)
+     relogio.js   as horas de serviço de cada O.S. (Relogio)
    Roda igual no Live Server (dados-exemplo.js) e no Apps Script.
-   Fonte (build.py junta os quatro em appscript/logica.html).
+   Fonte (build.py junta os cinco em appscript/logica.html).
+
+   O relógio é separado do relatório: tocar numa O.S. pergunta se é
+   para INICIAR o serviço (o relógio começa a contar), e o relatório
+   abre depois, pelo "Finalizar serviço" ou pelo "Preencher
+   relatório". "Só o relatório" continua existindo; aí, na hora de
+   enviar, o técnico informa o início e o fim com justificativa.
 
    Vários relatórios em andamento ao mesmo tempo, cada um com o seu
    rascunho, guardado no celular a cada toque. Abrir outra O.S. nunca
@@ -25,7 +32,7 @@
      inicial. Serve para uma pergunta que já custou horas: "o que está
      no ar é o código novo ou o antigo?". No Live Server continua
      __VERSAO__ e aparece como "local". */
-  const VERSAO = 'site v1';
+  const VERSAO = 'site v2';
 
   const MAX_NA_LISTA     = 60;
   const MAX_ENVIADOS     = 5;      // quantos "enviados" a tela inicial mostra
@@ -90,9 +97,13 @@
   async function zerarCelular() {
     const naFila = Fila.lista().length;
     const abertos = S.rascunhos.length;
+    const relogios = (Relogio.atual() ? 1 : 0) + Relogio.pausadas().length;
+    const toques = Fila.toques().length;
     const perde = [
       abertos && plural(abertos, 'relatório em andamento', 'relatórios em andamento'),
-      naFila && plural(naFila, 'relatório assinado que AINDA NÃO SAIU', 'relatórios assinados que AINDA NÃO SAÍRAM')
+      naFila && plural(naFila, 'relatório assinado que AINDA NÃO SAIU', 'relatórios assinados que AINDA NÃO SAÍRAM'),
+      relogios && plural(relogios, 'relógio de O.S. aberto', 'relógios de O.S. abertos'),
+      toques && plural(toques, 'registro de horário que ainda não subiu', 'registros de horário que ainda não subiram')
     ].filter(Boolean);
     if (!await perguntar(
       'Apagar o que este app guardou NESTE celular? ' +
@@ -141,7 +152,52 @@
       if (e.target === $('#pergunta')) fecharPergunta(false);
     });
     document.addEventListener('keydown', e => {
-      if (e.key === 'Escape' && responderPergunta) fecharPergunta(false);
+      if (e.key !== 'Escape') return;
+      if (responderPergunta) fecharPergunta(false);
+      else if (responderCaixa) fecharCaixa(null);
+    });
+  }
+
+  /* ── Caixa com formulário ─────────────────────────────────────────
+     Irmã da pergunta, para o que precisa de campo: motivo da pausa,
+     correção de horário, iniciar a O.S. Quem abre monta o conteúdo e
+     liga os botões; a caixa devolve uma promessa com o que o botão
+     mandou (null = fechou sem salvar). O conteúdo é sempre um elemento
+     novo, para os eventos de uma caixa não sobrarem na seguinte. */
+  let responderCaixa = null;
+
+  function abrirCaixa(html, montar) {
+    if (responderCaixa) fecharCaixa(null);
+    const corpo = document.createElement('div');
+    corpo.innerHTML = html;
+    $('#caixa-cartao').replaceChildren(corpo);
+    $('#caixa').hidden = false;
+    document.body.classList.add('sem-rolagem');
+    return new Promise(ok => {
+      responderCaixa = ok;
+      if (montar) montar(corpo);
+    });
+  }
+
+  function fecharCaixa(valor) {
+    if (!responderCaixa) return;
+    const responder = responderCaixa;
+    responderCaixa = null;
+    $('#caixa').hidden = true;
+    if ($('#pergunta').hidden && !paisagem) document.body.classList.remove('sem-rolagem');
+    responder(valor);
+  }
+
+  function erroCaixa(msg) {
+    const el = $('#caixa-cartao .erro');
+    if (!el) { toast(msg); return; }
+    el.textContent = msg;
+    el.hidden = false;
+  }
+
+  function prepararCaixa() {
+    $('#caixa').addEventListener('click', e => {
+      if (e.target === $('#caixa') || e.target.closest('[data-fechar]')) fecharCaixa(null);
     });
   }
 
@@ -189,6 +245,7 @@
       maquinas: [maqVazia({ modelo: o.modelo, serie: o.serie })],
       responsavel: { nome: '', documento: '', email: '' },
       assinaturas: { tecnico: null, cliente: null },   // traços, não imagem: redesenha em qualquer tamanho
+      relogio: o.relogio || '',     // o relógio da O.S. (relogio.js), quando o relatório nasceu dele
       etapa: 'preencher',
       criadoEm: Date.now(), atualizadoEm: Date.now()
     };
@@ -312,6 +369,7 @@
   // ── Tela 1: fila, em andamento e escolher a O.S. ───────────────
   function renderInicio() {
     renderEu();
+    renderRelogio();
     renderFila();
     renderAndamento();
     renderOrdens();
@@ -347,11 +405,13 @@
     $('#lista-andamento').innerHTML = lista.map(r => {
       const etapa = r.etapa !== 'revisar' ? 'preenchendo'
         : r.assinaturas.cliente ? 'cliente já assinou' : 'na revisão';
+      const rel = relogioDoRascunho(r);
+      const horas = rel ? ` · ${duracao(rel.minutos)} de serviço` : '';
       return `<div class="rascunho">
         <button type="button" class="ordem rascunho__abrir" data-abrir="${esc(r.id)}">
           <span class="ordem__cab"><span class="ordem__os">${esc(r.os || 'sem O.S.')}</span><span class="ordem__data">${esc(quando(r.atualizadoEm))}</span></span>
           <span class="ordem__cliente">${esc(r.cliente || '—')}</span>
-          <span class="ordem__extra">${plural(r.maquinas.length, 'máquina', 'máquinas')} · ${etapa}</span>
+          <span class="ordem__extra">${plural(r.maquinas.length, 'máquina', 'máquinas')} · ${etapa}${esc(horas)}</span>
         </button>
         <button type="button" class="btn btn--mini rascunho__descartar" data-descartar="${esc(r.id)}"
           aria-label="Descartar o relatório da O.S. ${esc(r.os || 'sem número')}">Descartar</button>
@@ -377,9 +437,12 @@
   async function descartar(id) {
     const r = S.rascunhos.find(x => x.id === id);
     if (!r) return;
+    const rel = relogioDoRascunho(r);
     if (!await perguntar(`Descartar o relatório da O.S. ${r.os || 'sem número'}? ` +
-                         'O que foi digitado e assinado será apagado.', 'Descartar')) return;
+                         'O que foi digitado e assinado será apagado.' +
+                         (rel ? ' Os horários marcados no relógio continuam na planilha.' : ''), 'Descartar')) return;
     await tirarRascunho(r);
+    if (rel && rel.estado === 'finalizado') await Relogio.arquivar(rel.id);
     renderAndamento();
     renderOrdens();
   }
@@ -421,7 +484,9 @@
 
     caixa.innerHTML = ordenadas.slice(0, MAX_NA_LISTA).map(o => {
       const extra = [o.modelo, o.serie ? 'S/N ' + o.serie : '', o.descricao].filter(Boolean).join(' · ');
-      const selo = rascunhoDa(o.os) ? 'Em andamento neste celular · toque para continuar'
+      const rel = Relogio.daOs(o.os);
+      const selo = rel ? SELO_RELOGIO[rel.estado] || ''
+        : rascunhoDa(o.os) ? 'Em andamento neste celular · toque para continuar'
         : o.feito ? 'Já encerrada · novo relatório sai como v2' : '';
       return `<button type="button" class="ordem${o.feito ? ' ordem--feita' : ''}" data-i="${todas.indexOf(o)}">
         <span class="ordem__cab"><span class="ordem__os">${esc(o.os)}</span><span class="ordem__data">${esc(br(o.data))}</span></span>
@@ -435,26 +500,386 @@
 
   const rascunhoDa = os => (os ? S.rascunhos.find(r => r.os.trim() === os) : null);
 
-  /* Começar do zero, sempre: da O.S. vêm só cliente, modelo e série
-     (o que a planilha sabe da máquina), nunca nada do relatório
-     anterior. O segundo atendimento é um relatório novo, não uma
-     correção do primeiro — o servidor é que numera o v2.
+  /* Tocar numa O.S.:
+       • com relógio pausado, retoma; correndo, avisa; serviço
+         finalizado, abre o relatório;
+       • com relatório aberto no celular (sem relógio), continua nele:
+         dois rascunhos da mesma O.S. só confundem;
+       • senão, pergunta se é para iniciar o serviço agora (ou só o
+         relatório).
 
-     Os outros relatórios em andamento ficam como estão. Se ESTA O.S.
-     já tem um aberto no celular, o toque continua nele: dois rascunhos
-     da mesma O.S. só confundem. ("Digitar a O.S." sempre abre um novo.) */
+     O relatório começa do zero, sempre: da O.S. vêm só cliente, modelo
+     e série (o que a planilha sabe da máquina), nunca nada do relatório
+     anterior. O segundo atendimento é um relatório novo, não uma
+     correção do primeiro — o servidor é que numera o v2. */
   async function comecar(ordem) {
+    const rel = ordem.os ? Relogio.daOs(ordem.os) : null;
+    if (rel) {
+      if (rel.estado === 'pausada') {
+        if (await perguntar(`Retomar o serviço da O.S. ${ordem.os}?`, 'Retomar')) await acaoRelogio('retomar', rel.id);
+      } else if (rel.estado === 'finalizado') {
+        abrirRelatorioDo(rel.id);
+      } else {
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+        toast('Esta O.S. já está em serviço.');
+      }
+      return;
+    }
     const aberto = rascunhoDa(ordem.os);
     if (aberto) { abrirRascunho(aberto); return; }
     if (!exigirTecnico()) return;
     if (ordem.feito &&
-        !await perguntar(`A O.S. ${ordem.os} já foi encerrada. Começar um novo relatório para ela? ` +
-                 'Ele sai como v2, em branco, sem nada do atendimento anterior.', 'Começar')) return;
+        !await perguntar(`A O.S. ${ordem.os} já foi encerrada. Começar um novo atendimento para ela? ` +
+                 'O relatório sai como v2, em branco, sem nada do atendimento anterior.', 'Começar')) return;
+    await perguntarInicio(ordem);
+  }
+
+  function novoRelatorio(ordem) {
     S.r = novoRascunho(ordem);
     S.rascunhos.push(S.r);
     salvar();
     ir('preencher');
     if (!ordem.os) setTimeout(() => $('#f-os').focus(), 50);
+  }
+
+  /* Iniciar o serviço agora? Vale para a O.S. da lista e para a
+     digitada ("Digitar a O.S.", que pede o número aqui mesmo). */
+  async function perguntarInicio(ordem) {
+    const digitar = !ordem.os;
+    const atual = Relogio.atual();
+    const escolha = await abrirCaixa(`
+      <p class="modal__txt">${digitar ? '<b>Digitar a O.S.</b>'
+        : `<b>O.S. ${esc(ordem.os)}</b><br>${esc(ordem.cliente || '')}`}</p>
+      ${digitar ? `<div class="cp"><label for="cx-os">Número da O.S.</label>
+        <input class="campo" id="cx-os" autocomplete="off"></div>` : ''}
+      <p class="modal__txt">Iniciar o serviço agora, às ${hhmm(Date.now())}?
+        ${atual ? `<br><span class="caixa__nota">A O.S. ${esc(atual.os)}, que está ${atual.estado === 'almoco' ? 'no almoço' : 'em serviço'}, vai ser pausada.</span>` : ''}</p>
+      <p class="erro" hidden></p>
+      <div class="modal__acoes">
+        <button type="button" class="btn btn--fantasma" data-fechar>Cancelar</button>
+        <button type="button" class="btn btn--fantasma" data-escolha="relatorio">Só o relatório</button>
+        <button type="button" class="btn btn--acento" data-escolha="iniciar">Iniciar serviço</button>
+      </div>`, corpo => {
+      corpo.addEventListener('click', e => {
+        const b = e.target.closest('[data-escolha]');
+        if (!b) return;
+        const os = digitar ? corpo.querySelector('#cx-os').value.trim() : ordem.os;
+        if (!os && b.dataset.escolha === 'iniciar') { erroCaixa('Digite o número da O.S.'); return; }
+        fecharCaixa({ acao: b.dataset.escolha, os });
+      });
+      if (digitar) setTimeout(() => corpo.querySelector('#cx-os').focus(), 50);
+    });
+    if (!escolha) return;
+
+    let dados = ordem;
+    if (digitar && escolha.os) {
+      // digitou uma O.S. que já está na lista ou no celular: segue o caminho dela
+      dados = S.inicio.ordens.find(o => o.os === escolha.os) || { os: escolha.os };
+      const ja = Relogio.daOs(dados.os) || rascunhoDa(dados.os);
+      if (ja) { comecar(dados); return; }
+    }
+    if (escolha.acao === 'relatorio') { novoRelatorio(dados); return; }
+    await acaoRelogio('iniciar', '', dados);
+  }
+
+  // ── Relógio da O.S. (relogio.js) ───────────────────────────────
+  const MOTIVOS_PAUSA = ['Aguardando peça', 'Aguardando cliente', 'Fim do expediente'];
+  const ESTADOS = { servico: 'Em serviço', almoco: 'No almoço', pausada: 'Pausada',
+                    finalizado: 'Serviço finalizado', cancelado: 'Cancelado' };
+  const SELO_RELOGIO = {
+    servico: 'Em serviço agora', almoco: 'No almoço', pausada: 'Pausada · toque para retomar',
+    finalizado: 'Serviço finalizado · toque para o relatório'
+  };
+  const correndo = rel => rel && (rel.estado === 'servico' || rel.estado === 'almoco');
+
+  const hhmm = ms => { const d = new Date(ms); return `${pad(d.getHours())}:${pad(d.getMinutes())}`; };
+  // 227 → "3h47"; 45 → "45 min"
+  const duracao = min => (min < 60 ? `${min} min` : `${Math.floor(min / 60)}h${pad(min % 60)}`);
+  // ms ↔ valor do <input type="datetime-local"> (hora local do celular)
+  const paraCampo = ms => { const d = new Date(ms); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${hhmm(ms)}`; };
+  const doCampo = v => { const ms = v ? new Date(v).getTime() : NaN; return isNaN(ms) ? 0 : ms; };
+
+  // O relógio do relatório: o de onde ele nasceu, ou o da O.S. dele
+  const relogioDoRascunho = r => (r.relogio && Relogio.resumo(r.relogio)) || Relogio.daOs((r.os || '').trim());
+
+  /* Cartão do topo: a O.S. em serviço agora, com os botões grandes. As
+     pausadas ficam logo abaixo, cada uma com os seus botões. */
+  function renderRelogio() {
+    const a = Relogio.atual();
+    const cartao = $('#relogio');
+    cartao.hidden = !a;
+    if (a) {
+      const id = esc(a.id);
+      cartao.className = 'cartao relogio' + (a.esquecido ? ' relogio--esquecido' : a.estado === 'almoco' ? ' relogio--almoco' : '');
+      cartao.innerHTML = `
+        <div class="relogio__cab">
+          <span class="relogio__estado">${ESTADOS[a.estado]}</span>
+          <span class="relogio__total" aria-label="tempo em serviço">${duracao(a.minutos)}</span>
+        </div>
+        <div class="relogio__os">O.S. ${esc(a.os)}</div>
+        <div class="relogio__cliente">${esc(a.cliente || '—')}</div>
+        <div class="relogio__desde">${a.estado === 'almoco' ? 'no almoço desde' : 'desde'} ${esc(quando(a.desde))}</div>
+        ${a.esquecido ? `<div class="erro relogio__alerta"><span>Correndo há ${duracao(Math.round((Date.now() - a.desde) / 60000))} direto. Esqueceu de pausar?</span>
+          <button type="button" class="btn btn--mini" data-rel="esquecido" data-id="${id}">Corrigir</button></div>` : ''}
+        <div class="relogio__btns">
+          ${a.estado === 'almoco'
+            ? `<button type="button" class="btn btn--primario" data-rel="volta" data-id="${id}">Voltar do almoço</button>`
+            : `<button type="button" class="btn btn--fantasma" data-rel="almoco" data-id="${id}">Almoço</button>`}
+          <button type="button" class="btn btn--fantasma" data-rel="pausar" data-id="${id}">Pausar</button>
+        </div>
+        <button type="button" class="btn btn--acento btn--largo" data-rel="finalizar" data-id="${id}">Finalizar serviço</button>
+        <div class="relogio__links">
+          <button type="button" class="ligacao" data-rel="relatorio" data-id="${id}">Preencher relatório ›</button>
+          <button type="button" class="ligacao" data-rel="ajustar" data-id="${id}">Ajustar horários ›</button>
+        </div>`;
+    }
+
+    const pausadas = Relogio.pausadas();
+    $('#pausadas').hidden = !pausadas.length;
+    $('#lista-pausadas').innerHTML = pausadas.map(p => {
+      const id = esc(p.id);
+      return `<div class="ordem ordem--pausada">
+        <span class="ordem__cab"><span class="ordem__os">${esc(p.os)}</span><span class="ordem__data">desde ${esc(quando(p.desde))}</span></span>
+        <span class="ordem__cliente">${esc(p.cliente || '—')}</span>
+        <span class="ordem__extra">${esc(p.motivo || 'Pausada')} · ${duracao(p.minutos)} em serviço</span>
+        <span class="pausada__btns">
+          <button type="button" class="btn btn--mini btn--forte" data-rel="retomar" data-id="${id}">Retomar</button>
+          <button type="button" class="btn btn--mini" data-rel="finalizar" data-id="${id}">Finalizar</button>
+          <button type="button" class="btn btn--mini" data-rel="relatorio" data-id="${id}">Relatório</button>
+          <button type="button" class="btn btn--mini" data-rel="ajustar" data-id="${id}">Horários</button>
+        </span>
+      </div>`;
+    }).join('');
+    renderToquesFila();
+  }
+
+  // Toques do relógio que ainda não chegaram à planilha
+  function renderToquesFila() {
+    const n = Fila.toques().length;
+    const el = $('#toques-fila');
+    el.hidden = !n;
+    el.textContent = !n ? '' : plural(n, 'registro de horário esperando', 'registros de horário esperando') +
+      ' para subir para a planilha.' + (navigator.onLine === false ? ' Sem sinal: sobem quando a conexão voltar.' : '');
+  }
+
+  // Faixa fina no relatório: o estado do relógio desta O.S.
+  function renderFaixa() {
+    const r = S.r;
+    const rel = r && relogioDoRascunho(r);
+    $$('.faixa-relogio').forEach(el => {
+      el.classList.toggle('faixa-relogio--sem', !rel);
+      el.textContent = !r ? ''
+        : !rel ? 'Sem horário marcado: na hora de enviar, informe o início e o fim do serviço.'
+        : `${ESTADOS[rel.estado]}${correndo(rel) ? ' desde ' + quando(rel.desde) : ''} · ${duracao(rel.minutos)} em serviço`;
+    });
+  }
+
+  // Um toque de cada vez: dedo nervoso não marca almoço duas vezes.
+  let relogioOcupado = false;
+  async function acaoRelogio(acao, id, dados) {
+    if (relogioOcupado) return;
+    relogioOcupado = true;
+    try {
+      if (acao === 'iniciar') {
+        const res = await Relogio.iniciar(dados, (tecnicoAtual() || {}).nome);
+        toast(res.pausou ? `Serviço iniciado. A O.S. ${res.pausou} foi pausada.`
+                         : `Serviço da O.S. ${dados.os} iniciado às ${hhmm(Date.now())}.`);
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }
+      if (acao === 'almoco')    { await Relogio.almoco(id); toast('Bom almoço. Na volta, toque em "Voltar do almoço".'); }
+      if (acao === 'volta')     await Relogio.voltar(id);
+      if (acao === 'pausar')    await pausarRelogio(id);
+      if (acao === 'retomar') {
+        const res = await Relogio.retomar(id);
+        toast(res.pausou ? `Retomado. A O.S. ${res.pausou} foi pausada.` : 'Serviço retomado.');
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }
+      if (acao === 'finalizar') await finalizarServico(id);
+      if (acao === 'relatorio') abrirRelatorioDo(id);
+      if (acao === 'ajustar')   await ajustarHorarios(id);
+      if (acao === 'esquecido') await corrigirEsquecido(Relogio.resumo(id));
+    } catch (e) {
+      toast(msgErro(e));
+    } finally {
+      relogioOcupado = false;
+      if (S.tela === 'inicio') renderInicio();
+    }
+  }
+
+  async function pausarRelogio(id) {
+    const rel = Relogio.resumo(id);
+    const motivo = await abrirCaixa(`
+      <p class="modal__txt"><b>Pausar a O.S. ${esc(rel.os)}</b><br>Por quê?</p>
+      <div class="opcoes">
+        ${MOTIVOS_PAUSA.map((m, i) => `<label class="marcar opcao"><input type="radio" name="motivo" value="${esc(m)}"${i ? '' : ' checked'}> ${esc(m)}</label>`).join('')}
+        <label class="marcar opcao"><input type="radio" name="motivo" value=""> Outro</label>
+        <input class="campo" id="cx-outro" placeholder="Qual?" maxlength="120" autocomplete="off" hidden>
+      </div>
+      <p class="erro" hidden></p>
+      <div class="modal__acoes">
+        <button type="button" class="btn btn--fantasma" data-fechar>Cancelar</button>
+        <button type="button" class="btn btn--primario" id="cx-ok">Pausar</button>
+      </div>`, corpo => {
+      const outro = corpo.querySelector('#cx-outro');
+      const marcado = () => corpo.querySelector('[name=motivo]:checked').value;
+      corpo.addEventListener('change', () => { outro.hidden = !!marcado(); if (!outro.hidden) outro.focus(); });
+      corpo.querySelector('#cx-ok').addEventListener('click', () => {
+        const v = marcado() || outro.value.trim();
+        if (!v) { erroCaixa('Escreva o motivo.'); return; }
+        fecharCaixa(v);
+      });
+    });
+    if (motivo) await Relogio.pausar(id, motivo);
+  }
+
+  async function finalizarServico(id) {
+    const rel = Relogio.resumo(id);
+    if (!await perguntar(`Finalizar o serviço da O.S. ${rel.os} agora, às ${hhmm(Date.now())}? ` +
+                         'Depois vem o relatório.', 'Finalizar serviço')) return;
+    await Relogio.finalizar(id);
+    abrirRelatorioDo(id);
+  }
+
+  // O relatório da O.S. deste relógio: o que já está aberto no celular, ou um novo
+  function abrirRelatorioDo(id) {
+    const ordem = Relogio.ordem(id);
+    if (!ordem) return;
+    const aberto = rascunhoDa(ordem.os);
+    if (aberto) {
+      aberto.relogio = id;
+      abrirRascunho(aberto);
+      return;
+    }
+    novoRelatorio(Object.assign(ordem, { relogio: id }));
+  }
+
+  /* Formulário de horário com justificativa: corrigir um toque, incluir
+     um esquecido, dizer que horas parou, lançar início e fim. Quem
+     chama diz os campos e o que fazer ao salvar; a recusa do relógio
+     (hora no futuro, ordem que não fecha, cruzou com outra O.S.)
+     aparece na própria caixa, e ela continua aberta. */
+  function formHora(o) {
+    const tipos = o.tipos || [];
+    return abrirCaixa(`
+      <p class="modal__txt"><b>${esc(o.titulo)}</b>${o.texto ? '<br>' + esc(o.texto) : ''}</p>
+      ${tipos.length ? `<div class="cp"><label for="cx-tipo">O que foi</label>
+        <select class="campo" id="cx-tipo">${tipos.map(t => `<option value="${t}">${esc(Relogio.NOMES[t])}</option>`).join('')}</select></div>
+        <div class="cp" id="cx-motivo-cp" hidden><label for="cx-motivo">Motivo da pausa</label>
+        <select class="campo" id="cx-motivo">${MOTIVOS_PAUSA.concat('Outro').map(m => `<option>${esc(m)}</option>`).join('')}</select></div>` : ''}
+      ${(o.escolhas || []).length ? `<div class="opcoes">${o.escolhas.map((e, i) =>
+        `<label class="marcar opcao"><input type="radio" name="cx-escolha" value="${e.valor}"${i ? '' : ' checked'}> ${esc(e.rotulo)}</label>`).join('')}</div>` : ''}
+      ${o.horas.map((h, i) => `<div class="cp"><label for="cx-hora${i}">${esc(h.rotulo)}</label>
+        <input class="campo" id="cx-hora${i}" type="datetime-local" value="${paraCampo(h.hora)}"></div>`).join('')}
+      <div class="cp"><label for="cx-just">Justificativa</label>
+        <textarea class="campo" id="cx-just" rows="2" maxlength="300" placeholder="Ex.: esqueci de marcar na hora"></textarea></div>
+      <p class="erro" hidden></p>
+      <div class="modal__acoes">
+        <button type="button" class="btn btn--fantasma" data-fechar>${esc(o.textoNao || 'Voltar')}</button>
+        <button type="button" class="btn btn--primario" id="cx-ok">${esc(o.textoOk || 'Salvar')}</button>
+      </div>`, corpo => {
+      const q = sel => corpo.querySelector(sel);
+      if (tipos.length) q('#cx-tipo').addEventListener('change', () => { q('#cx-motivo-cp').hidden = q('#cx-tipo').value !== 'pausa'; });
+      let salvando = false;
+      q('#cx-ok').addEventListener('click', async () => {
+        if (salvando) return;
+        const horas = o.horas.map((h, i) => doCampo(q('#cx-hora' + i).value));
+        if (horas.some(h => !h)) { erroCaixa('Preencha a data e a hora.'); return; }
+        const escolha = q('[name=cx-escolha]:checked');
+        salvando = true;
+        try {
+          const res = await o.salvar({
+            horas, just: q('#cx-just').value.trim(),
+            tipo: tipos.length ? q('#cx-tipo').value : '',
+            motivo: tipos.length && q('#cx-tipo').value === 'pausa' ? q('#cx-motivo').value : '',
+            escolha: escolha ? escolha.value : ''
+          });
+          fecharCaixa(res || true);
+        } catch (e) {
+          erroCaixa(msgErro(e));
+        } finally {
+          salvando = false;
+        }
+      });
+    });
+  }
+
+  /* Ajustar horários: a lista dos toques desta O.S., cada um com o seu
+     "Corrigir", e "incluir um esquecido". A correção não apaga o
+     original: vira um registro novo, com a justificativa. */
+  async function ajustarHorarios(id) {
+    for (;;) {
+      const rel = Relogio.resumo(id);
+      if (!rel) return;
+      const escolha = await abrirCaixa(`
+        <p class="modal__txt"><b>Horários da O.S. ${esc(rel.os)}</b><br>
+          <span class="caixa__nota">${duracao(rel.minutos)} em serviço · ${esc(ESTADOS[rel.estado].toLowerCase())}</span></p>
+        <ul class="toques">${rel.toques.map(t => `<li class="toque">
+            <span class="toque__hora">${esc(quando(t.hora))}</span>
+            <span class="toque__tipo">${esc(Relogio.NOMES[t.tipo])}${t.motivo ? ' · ' + esc(t.motivo) : ''}
+              ${t.corrigido || t.justificativa ? '<span class="toque__marca">corrigido</span>' : ''}</span>
+            <button type="button" class="btn btn--mini" data-escolha="corrigir:${esc(t.id)}">Corrigir</button>
+          </li>`).join('')}</ul>
+        <button type="button" class="btn btn--fantasma btn--largo" data-escolha="incluir">+ Incluir um registro esquecido</button>
+        <div class="modal__acoes caixa__rodape">
+          <button type="button" class="ligacao" data-escolha="cancelar">Iniciei por engano: cancelar</button>
+          <button type="button" class="btn btn--primario" data-fechar>Fechar</button>
+        </div>`, corpo => corpo.addEventListener('click', e => {
+          const b = e.target.closest('[data-escolha]');
+          if (b) fecharCaixa(b.dataset.escolha);
+        }));
+      if (!escolha) return;
+
+      if (escolha === 'cancelar') {
+        if (await perguntar(`Cancelar o relógio da O.S. ${rel.os}? Ele sai deste celular; na planilha os ` +
+                            'horários ficam, marcados como cancelados.', 'Cancelar o relógio')) {
+          await Relogio.cancelar(id);
+          toast(`Relógio da O.S. ${rel.os} cancelado.`);
+          return;
+        }
+      } else if (escolha === 'incluir') {
+        await formHora({
+          titulo: `Incluir um registro na O.S. ${rel.os}`,
+          tipos: ['almoco', 'volta', 'pausa', 'retomada', 'fim'],
+          horas: [{ rotulo: 'Quando', hora: Date.now() }],
+          salvar: d => Relogio.incluir(id, d.tipo, d.horas[0], d.just, d.motivo)
+        });
+      } else {
+        const t = rel.toques.find(x => 'corrigir:' + x.id === escolha);
+        if (t) await formHora({
+          titulo: `Corrigir: ${Relogio.NOMES[t.tipo]} da O.S. ${rel.os}`,
+          texto: `Está marcado ${quando(t.hora)}. Qual é a hora certa?`,
+          horas: [{ rotulo: 'Hora certa', hora: t.hora }],
+          salvar: d => Relogio.ajustar(id, t.id, d.horas[0], d.just)
+        });
+      }
+    }
+  }
+
+  // Relógio correndo há mais de 12 h: que horas ele parou?
+  function corrigirEsquecido(rel) {
+    if (!rel) return null;
+    return formHora({
+      titulo: `O.S. ${rel.os}: o relógio está correndo desde ${quando(rel.desde)}`,
+      texto: 'Que horas você parou?',
+      escolhas: [{ valor: 'pausa', rotulo: 'Pausei: volto a esta O.S. depois' },
+                 { valor: 'fim', rotulo: 'Terminei o serviço' }],
+      horas: [{ rotulo: 'Parei em', hora: rel.desde }],
+      textoNao: 'Depois',
+      salvar: d => (d.escolha === 'fim'
+        ? Relogio.incluir(rel.id, 'fim', d.horas[0], d.just)
+        : Relogio.incluir(rel.id, 'pausa', d.horas[0], d.just, 'Fim do expediente'))
+    });
+  }
+
+  // Pergunta uma vez por abertura (ou volta do app para a frente);
+  // "Depois" deixa o cartão vermelho até ele corrigir.
+  const esquecidoVisto = new Set();
+  async function conferirEsquecidos() {
+    if (responderCaixa || responderPergunta || paisagem || S.tela !== 'inicio') return;
+    const e = Relogio.esquecidos().find(x => !esquecidoVisto.has(x.id));
+    if (!e) return;
+    esquecidoVisto.add(e.id);
+    await acaoRelogio('esquecido', e.id);
   }
 
   // ── Tela 2: preencher ──────────────────────────────────────────
@@ -848,6 +1273,40 @@
       return;
     }
 
+    /* As horas (relogio.js). O tempo do relatório não conta: relógio
+       que ainda corre (ou está pausado) termina aqui, com a pergunta.
+       Sem relógio nenhum (esqueceu de iniciar, ou foi "só o
+       relatório"), ele informa início e fim, com justificativa. */
+    let rel = relogioDoRascunho(r);
+    try {
+      if (rel && rel.estado !== 'finalizado') {
+        if (!await perguntar(`O relógio da O.S. ${r.os.trim()} ainda está ${rel.estado === 'pausada' ? 'pausado' : 'correndo'}. ` +
+                             `Finalizar o serviço agora, às ${hhmm(Date.now())}, e enviar?`, 'Finalizar e enviar')) return;
+        await Relogio.finalizar(rel.id);
+        rel = Relogio.resumo(rel.id);
+      }
+      if (!rel) {
+        const m = r.maquinas[0] || {};
+        const ordem = { os: r.os.trim(), cliente: r.cliente.trim(), modelo: m.modelo, serie: m.serie, descricao: r.servico };
+        let de = new Date(r.data + 'T08:00').getTime();
+        if (!(de < Date.now())) de = Date.now() - 3600e3;
+        const novo = await formHora({
+          titulo: `A O.S. ${ordem.os} não tem horário marcado`,
+          texto: 'Informe quando o serviço começou e quando terminou.',
+          horas: [{ rotulo: 'Início', hora: de }, { rotulo: 'Fim', hora: Date.now() }],
+          textoNao: 'Cancelar', textoOk: 'Salvar e enviar',
+          salvar: d => Relogio.lancarPorFora(ordem, t.nome, d.horas[0], d.horas[1], d.just)
+        });
+        if (!novo) return;
+        r.relogio = novo.id;
+        rel = Relogio.resumo(novo.id);
+      }
+    } catch (e) {
+      erro.textContent = msgErro(e);
+      erro.hidden = false;
+      return;
+    }
+
     const envio = {
       id: r.id, os: r.os.trim(), cliente: r.cliente.trim(),
       data: r.data, dataFim: (r.dataFim || '').trim(), servico: r.servico.trim(),
@@ -860,7 +1319,9 @@
       responsavel: {
         nome: r.responsavel.nome.trim(), documento: r.responsavel.documento.trim(), email: r.responsavel.email.trim()
       },
-      assinaturas: { tecnico: padTec.paraPng(), cliente: padCli.paraPng() }
+      assinaturas: { tecnico: padTec.paraPng(), cliente: padCli.paraPng() },
+      horas: rel.minutos,     // minutos em serviço, já com as correções
+      relogio: rel.id
     };
     // o código de quem fechou vai junto para a fila: se outro técnico
     // entrar neste celular antes de o sinal voltar, o relatório continua
@@ -886,6 +1347,8 @@
         return;
       }
       await tirarRascunho(r);
+      // os toques já estão na fila: o relógio terminado sai do celular
+      try { await Relogio.arquivar(rel.id); } catch (e) { /* fica na lista; não atrapalha o envio */ }
       const res = await Fila.enviarAgora(envio.id);
       if (res) mostrarEnviado(res); else mostrarNaFila();
     } finally {
@@ -940,6 +1403,7 @@
     if (tela === 'inicio')    renderInicio();
     if (tela === 'preencher') preencherCampos();
     if (tela === 'revisar')   abrirRevisao();
+    if (tela === 'preencher' || tela === 'revisar') renderFaixa();
 
     $('#topo-sub').textContent = S.r && tela !== 'inicio'
       ? [S.r.os && 'O.S. ' + S.r.os, S.r.cliente].filter(Boolean).join(' · ') || 'Relatório de atendimento'
@@ -955,6 +1419,11 @@
       if (b) comecar(S.inicio.ordens[+b.dataset.i]);
     });
     $('#btn-manual').addEventListener('click', () => comecar({}));
+    // botões do relógio (cartão do topo e pausadas), por delegação
+    $('#tela-inicio').addEventListener('click', e => {
+      const b = e.target.closest('[data-rel]');
+      if (b) acaoRelogio(b.dataset.rel, b.dataset.id);
+    });
     $('#lista-andamento').addEventListener('click', e => {
       const abrir = e.target.closest('[data-abrir]');
       const desc  = e.target.closest('[data-descartar]');
@@ -1105,12 +1574,27 @@
 
     await Fila.iniciar({
       servidor: Servidor,
-      aoMudar: () => { if (S.tela === 'inicio') { renderFila(); renderEnviados(); } },
+      aoMudar: () => { if (S.tela === 'inicio') { renderFila(); renderEnviados(); renderToquesFila(); } },
       aoEnviar: feito => toast(`O.S. ${feito.os} enviada${feito.erroEmail ? ', mas o e-mail falhou' : ''}.`)
+    });
+    await Relogio.iniciarModulo({
+      fila: Fila,
+      aoMudar: () => { if (S.tela === 'inicio') { renderRelogio(); renderOrdens(); } else renderFaixa(); }
     });
     ir('inicio');
     carregarInicio();
     registrarServiceWorker();
+    conferirEsquecidos();
+
+    // o total do relógio anda sozinho na tela
+    setInterval(() => {
+      if (document.visibilityState !== 'visible') return;
+      if (S.tela === 'inicio') renderRelogio(); else renderFaixa();
+    }, 30 * 1000);
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'hidden') esquecidoVisto.clear();
+      else { if (S.tela === 'inicio') renderRelogio(); conferirEsquecidos(); }
+    });
 
     // A lista de O.S. não veio (sem sinal, ou foi entrar com a conta
     // Kalmar noutra aba): tenta de novo quando o sinal ou o app voltam.
@@ -1133,7 +1617,8 @@
   $('#carimbo').textContent = 'versão ' + (VERSAO.indexOf('__') === 0 ? 'local (Live Server)' : VERSAO);
   ligarEventos();
   prepararPergunta();
+  prepararCaixa();
   prepararAssinaturas();
   iniciar();
 })();
-// -------- rat.js v3 --------
+// -------- rat.js v4 --------

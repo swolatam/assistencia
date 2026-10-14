@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- -------- index.html v2 -------- -->
+<!-- -------- index.html v3 -------- -->
 <html lang="pt-BR">
 <head>
 <meta charset="utf-8">
@@ -39,6 +39,16 @@
     <div class="cartao eu" id="eu"></div>
     <p class="aviso" id="aviso-memoria" hidden>Este navegador não deixa o app guardar nada no
       celular: não feche esta aba antes de o relatório sair.</p>
+
+    <!-- Relógio da O.S. (relogio.js): a que está em serviço agora, com os
+         botões grandes, e as pausadas logo abaixo. No topo: abriu o app,
+         é a primeira coisa. -->
+    <div class="cartao relogio" id="relogio" hidden></div>
+    <div id="pausadas" hidden>
+      <h2 class="titulo">Pausadas</h2>
+      <div class="ordens" id="lista-pausadas"></div>
+    </div>
+    <p class="vazio" id="toques-fila" hidden></p>
 
     <!-- Fechados e assinados que ainda não chegaram ao servidor. No topo:
          é o que não pode se perder. -->
@@ -80,6 +90,7 @@
   <section class="tela" id="tela-preencher" aria-labelledby="t-preencher" hidden>
     <button type="button" class="voltar" data-ir="inicio">‹ Início · o rascunho fica guardado</button>
     <h2 class="titulo" id="t-preencher">Atendimento</h2>
+    <p class="faixa-relogio"></p>
 
     <div class="cartao">
       <div class="cp">
@@ -124,6 +135,7 @@
   <section class="tela" id="tela-revisar" aria-labelledby="t-revisar" hidden>
     <button type="button" class="voltar" data-ir="preencher">‹ Editar</button>
     <h2 class="titulo" id="t-revisar">Leia com o cliente</h2>
+    <p class="faixa-relogio"></p>
 
     <article class="cartao leitura" id="leitura"></article>
 
@@ -220,6 +232,13 @@
   </div>
 </div>
 
+<!-- ═══ Caixa com formulário ═══════════════════════════════════
+     Como a pergunta, mas com campos: motivo da pausa, correção de
+     horário, iniciar a O.S. O conteúdo é montado pelo rat.js. -->
+<div class="modal" id="caixa" hidden role="dialog" aria-modal="true">
+  <div class="modal__cartao" id="caixa-cartao"></div>
+</div>
+
 <!-- ═══ Assinar com o celular deitado ═══════════════════════════
      O painel é girado 90° por CSS, não pelo sistema: funciona mesmo
      com a rotação da tela travada, e no iPhone, onde travar a tela
@@ -252,7 +271,8 @@
 <script src="servidor.js"></script>
 <script src="armazem.js"></script>
 <script src="fila.js"></script>
+<script src="relogio.js"></script>
 <script src="rat.js"></script>
 </body>
 </html>
-<!-- -------- index.html v2 -------- -->
+<!-- -------- index.html v3 -------- -->

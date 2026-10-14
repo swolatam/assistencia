@@ -1,4 +1,4 @@
-// -------- sw.js v2 --------
+// -------- sw.js v3 --------
 /* ═══════════════════════════════════════════════════════════════
    SERVICE WORKER — o app guardado no celular
 
@@ -26,7 +26,7 @@ const PRAZO = 4000;
 // A casca do app. './' e não 'index.html': toda página do app é a
 // mesma, e é com './' que o técnico abre o app instalado.
 const CASCA = [
-  './', 'rat.css', 'config.js', 'servidor.js', 'armazem.js', 'fila.js', 'rat.js',
+  './', 'rat.css', 'config.js', 'servidor.js', 'armazem.js', 'fila.js', 'relogio.js', 'rat.js',
   'manifest.webmanifest', 'icones/icone-192.png', 'icones/icone-512.png'
 ];
 
@@ -85,4 +85,4 @@ async function guardadoPrimeiro(req) {
   if (res.ok || res.type === 'opaque') cache.put(req, res.clone());
   return res;
 }
-// -------- sw.js v2 --------
+// -------- sw.js v3 --------

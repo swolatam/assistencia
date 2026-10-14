@@ -1,12 +1,14 @@
-// -------- armazem.js v1 --------
+// -------- armazem.js v2 --------
 /* ═══════════════════════════════════════════════════════════════
    ARMAZÉM — o que fica guardado no aparelho
 
    Tudo o que o app guarda no celular passa por aqui, e só por aqui:
-   as telas não sabem que existe IndexedDB. Três gavetas:
+   as telas não sabem que existe IndexedDB. Quatro gavetas:
      rascunhos  um por relatório em andamento — vários ao mesmo tempo,
                 cada O.S. com o seu
-     fila       relatórios fechados que ainda não chegaram ao servidor
+     fila       relatórios fechados e toques do relógio que ainda não
+                chegaram ao servidor
+     relogios   o relógio de cada O.S. iniciada (relogio.js)
      prefs      técnico escolhido, assinatura lembrada, última lista de
                 O.S. e os últimos enviados
 
@@ -18,6 +20,9 @@
    as preferências, e só então sai do localStorage: o relatório que
    estava aberto no celular não se perde na troca de versão.
 
+   Banco versão 2: entrou a gaveta relogios. Quem abre o app novo com
+   o banco da versão 1 ganha a gaveta nova; o resto fica como estava.
+
    Sem IndexedDB (navegador muito restrito), guarda só na memória: o
    app funciona, mas fechar a aba perde tudo. Aí duravel fica false e
    a tela avisa.
@@ -26,7 +31,7 @@ window.Armazem = (function () {
   'use strict';
 
   const BANCO = 'sistema-os';
-  const GAVETAS = ['rascunhos', 'fila', 'prefs'];
+  const GAVETAS = ['rascunhos', 'fila', 'relogios', 'prefs'];
   const ANTIGAS = { rascunho: 'at.rascunho', tecnico: 'at.tecnico', assinatura: 'at.assinatura', inicio: 'at.inicio' };
 
   let db = null;
@@ -44,11 +49,12 @@ window.Armazem = (function () {
 
   function abrirBanco() {
     return new Promise((ok, falha) => {
-      const r = indexedDB.open(BANCO, 1);
+      const r = indexedDB.open(BANCO, 2);
       r.onupgradeneeded = () => {
         const d = r.result;
         if (!d.objectStoreNames.contains('rascunhos')) d.createObjectStore('rascunhos', { keyPath: 'id' });
         if (!d.objectStoreNames.contains('fila'))      d.createObjectStore('fila', { keyPath: 'id' });
+        if (!d.objectStoreNames.contains('relogios'))  d.createObjectStore('relogios', { keyPath: 'id' });
         if (!d.objectStoreNames.contains('prefs'))     d.createObjectStore('prefs');
       };
       r.onsuccess = () => {
@@ -93,7 +99,7 @@ window.Armazem = (function () {
       try {
         db = await abrirBanco();
       } catch (e) {
-        memoria = { rascunhos: new Map(), fila: new Map(), prefs: new Map() };
+        memoria = { rascunhos: new Map(), fila: new Map(), relogios: new Map(), prefs: new Map() };
         return;
       }
       await migrar();
@@ -142,7 +148,8 @@ window.Armazem = (function () {
     get duravel() { return !memoria; },
     rascunhos: { todos: () => todos('rascunhos'), gravar: r => gravar('rascunhos', r), apagar: id => apagar('rascunhos', id) },
     fila:      { todos: () => todos('fila'),      gravar: i => gravar('fila', i),      apagar: id => apagar('fila', id) },
+    relogios:  { todos: () => todos('relogios'),  gravar: r => gravar('relogios', r),  apagar: id => apagar('relogios', id) },
     pref:      { ler: k => ler('prefs', k), gravar: (k, v) => gravar('prefs', v, k), apagar: k => apagar('prefs', k) }
   };
 })();
-// -------- armazem.js v1 --------
+// -------- armazem.js v2 --------
