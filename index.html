@@ -1,101 +1,258 @@
 <!DOCTYPE html>
-<!-- -------- teste-ponte/index.html v1 -------- -->
+<!-- -------- index.html v2 -------- -->
 <html lang="pt-BR">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Teste da ponte</title>
-<style>
-  body { font-family: Arial, sans-serif; margin: 0; padding: 16px; background: #fff; color: #222; }
-  h1 { font-size: 20px; margin: 0 0 12px; }
-  input { width: 100%; box-sizing: border-box; padding: 10px; font-size: 14px; }
-  button { padding: 12px 16px; font-size: 16px; margin: 8px 8px 0 0; }
-  #passos div { padding: 10px; margin: 6px 0; border-radius: 6px; background: #eee; }
-  .ok { background: #d8f5d8 !important; }
-  .falha { background: #fbd9d9 !important; }
-  small { color: #666; }
-  iframe { display: none; }
-</style>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#2c112d">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icones/icone-192.png">
+<link rel="apple-touch-icon" href="icones/icone-apple-180.png">
+<meta name="apple-mobile-web-app-title" content="Assistência">
+<meta name="mobile-web-app-capable" content="yes">
+<title>Assistência técnica · Kalmar</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans:wght@400;500&display=swap">
+<link rel="stylesheet" href="rat.css">
 </head>
 <body>
-<h1>Teste da ponte com o Apps Script</h1>
 
-<p><small>Endereço do app (o que termina em /exec):</small></p>
-<input id="url" placeholder="https://script.google.com/a/macros/kalmarglobal.com/s/.../exec">
-<button id="testar">Testar</button>
-<button id="abrir">Abrir o app numa aba (login)</button>
+<header class="topo">
+  <svg class="marca-k" viewBox="0 0 677.85 524.93" fill="currentColor" role="img" aria-label="Kalmar">
+    <path d="m677.85,0h-282.12s-20.04,73.18-64.77,133.08c-47.35,63.4-119.63,113.81-122.69,116.87,133.02,0,305.18,22.57,469.58-249.94Z"/>
+    <path d="m208.27.22v249.95C152.36,250.17-11.89,215.72.68.22"/>
+    <path d="m677.85,524.93h-282.12s-20.04-73.18-64.77-133.08c-47.35-63.4-119.63-113.81-122.69-116.87,133.02,0,305.18-22.57,469.58,249.94Z"/>
+    <path d="m208.27,524.71v-249.94c-55.92,0-220.16,34.44-207.59,249.94"/>
+  </svg>
+  <div class="topo__txt">
+    <h1 class="topo__titulo">Assistência técnica</h1>
+    <p class="topo__sub" id="topo-sub">Relatório de atendimento</p>
+  </div>
+</header>
 
-<div id="passos"></div>
-<p><small id="navegador"></small></p>
-<p><small>teste-ponte v1</small></p>
+<main class="pagina">
 
-<script>
-// O endereço pode vir depois do # (não vai para o servidor do GitHub)
-// ou fica guardado deste aparelho da última vez.
-var campo = document.getElementById('url');
-var guardado = '';
-try { guardado = localStorage.getItem('ponte-url') || ''; } catch (e) {}
-campo.value = decodeURIComponent(location.hash.slice(1)) || guardado;
-document.getElementById('navegador').textContent = navigator.userAgent;
+  <!-- ═══ 1. Escolher a O.S. ═══════════════════════════════════ -->
+  <section class="tela" id="tela-inicio" aria-labelledby="t-inicio">
 
-var passos = document.getElementById('passos');
-var prazo = null;
-var chegou = {};
+    <div class="cartao eu" id="eu"></div>
+    <p class="aviso" id="aviso-memoria" hidden>Este navegador não deixa o app guardar nada no
+      celular: não feche esta aba antes de o relatório sair.</p>
 
-function passo(texto, classe) {
-  var d = document.createElement('div');
-  d.textContent = texto;
-  if (classe) d.className = classe;
-  passos.appendChild(d);
-}
+    <!-- Fechados e assinados que ainda não chegaram ao servidor. No topo:
+         é o que não pode se perder. -->
+    <div id="fila" hidden>
+      <h2 class="titulo">Fila de envio</h2>
+      <p class="vazio" id="fila-txt"></p>
+      <div class="ordens" id="lista-fila"></div>
+      <button type="button" class="btn btn--fantasma btn--largo" id="btn-fila-tentar">Tentar enviar agora</button>
+    </div>
 
-window.addEventListener('message', function (ev) {
-  if (!/^https:\/\/[a-z0-9-]+-script\.googleusercontent\.com$/.test(ev.origin)) return;
-  var m = ev.data || {};
-  if (m.ponte === 'carregou' && !chegou.carregou) {
-    chegou.carregou = true;
-    passo('1. A página do Apps Script abriu dentro do app (login aceito no iframe).', 'ok');
-  } else if (m.ponte === 'dados') {
-    clearTimeout(prazo);
-    if (m.nome) passo('2. Leu a planilha: você é ' + m.nome + ', ' + m.ordens + ' O.S. na lista. FUNCIONOU.', 'ok');
-    else if (m.emailDesconhecido) passo('2. Leu a planilha, mas o e-mail ' + m.emailDesconhecido + ' não está na aba Tecnicos. A ponte funciona.', 'ok');
-    else passo('2. Leu a planilha, mas sem e-mail do usuário (' + m.ordens + ' O.S.). A ponte funciona; o e-mail é outro assunto.', 'ok');
-  } else if (m.ponte === 'erro') {
-    clearTimeout(prazo);
-    passo('2. O Apps Script respondeu com erro: ' + m.erro, 'falha');
-  }
-});
+    <!-- Vários ao mesmo tempo, cada O.S. com o seu rascunho -->
+    <div id="andamento" hidden>
+      <h2 class="titulo">Em andamento</h2>
+      <div class="ordens" id="lista-andamento"></div>
+    </div>
 
-document.getElementById('testar').onclick = function () {
-  var base = campo.value.trim();
-  if (!/^https:\/\/script\.google\.com\/.+\/exec$/.test(base)) {
-    passo('Cole o endereço que termina em /exec.', 'falha');
-    return;
-  }
-  try { localStorage.setItem('ponte-url', base); } catch (e) {}
-  passos.innerHTML = '';
-  chegou = {};
-  var velho = document.querySelector('iframe');
-  if (velho) velho.remove();
-  passo('Abrindo o Apps Script escondido...');
+    <h2 class="titulo" id="t-inicio">Escolha a O.S.</h2>
+    <label class="sr" for="busca">Buscar O.S., cliente ou série</label>
+    <input class="campo busca" id="busca" type="search" placeholder="Buscar O.S., cliente, série…" autocomplete="off">
+    <p class="vazio">Aparecem as O.S. em aberto. Segundo atendimento? Digite o número da O.S.</p>
+    <p class="aviso" id="aviso-ordens" hidden></p>
+    <div class="ordens" id="ordens" aria-live="polite"></div>
+    <button type="button" class="btn btn--fantasma btn--largo" id="btn-manual">Não achou? Digitar a O.S.</button>
 
-  var f = document.createElement('iframe');
-  f.src = base + '?ponte=1&origem=' + encodeURIComponent(location.origin);
-  document.body.appendChild(f);
+    <div id="enviados" hidden>
+      <h2 class="titulo">Enviados deste celular</h2>
+      <ul class="enviados" id="lista-enviados"></ul>
+    </div>
 
-  clearTimeout(prazo);
-  prazo = setTimeout(function () {
-    if (chegou.carregou) passo('Abriu, mas a planilha não respondeu em 30 s. Tente de novo.', 'falha');
-    else passo('NÃO abriu em 30 s. Provável: o navegador não manda o login do Google dentro do iframe, ' +
-               'ou o Google pediu login. Toque em "Abrir o app numa aba", entre com a conta Kalmar e teste de novo.', 'falha');
-  }, 30000);
-};
+    <!-- Saída de emergência. Fica sempre aqui, discreta: quando alguma
+         coisa trava no celular do técnico no pátio, ele zera e segue. -->
+    <p class="rodape-app">
+      <span id="carimbo"></span>
+      <button type="button" class="ligacao" id="btn-zerar">Zerar os dados deste celular</button>
+    </p>
+  </section>
 
-document.getElementById('abrir').onclick = function () {
-  var base = campo.value.trim();
-  if (base) window.open(base, '_blank');
-};
-</script>
+  <!-- ═══ 2. Preencher ═════════════════════════════════════════ -->
+  <section class="tela" id="tela-preencher" aria-labelledby="t-preencher" hidden>
+    <button type="button" class="voltar" data-ir="inicio">‹ Início · o rascunho fica guardado</button>
+    <h2 class="titulo" id="t-preencher">Atendimento</h2>
+
+    <div class="cartao">
+      <div class="cp">
+        <label for="f-os">O.S.</label>
+        <input class="campo" id="f-os" data-campo="os" autocomplete="off" required>
+      </div>
+      <div class="grade-2">
+        <div class="cp">
+          <label for="f-data">Data do atendimento</label>
+          <input class="campo" id="f-data" data-campo="data" type="date" required>
+        </div>
+        <div class="cp">
+          <label for="f-data-fim">Até <span class="opcional">durou mais de um dia</span></label>
+          <input class="campo" id="f-data-fim" data-campo="dataFim" type="date">
+        </div>
+      </div>
+      <div class="cp">
+        <label for="f-cliente">Cliente</label>
+        <input class="campo" id="f-cliente" data-campo="cliente" autocomplete="off" required>
+      </div>
+      <div class="cp">
+        <label for="f-servico">Serviço solicitado <span class="opcional">opcional</span></label>
+        <textarea class="campo" id="f-servico" data-campo="servico" rows="2"></textarea>
+      </div>
+      <div class="cp">
+        <label for="f-descricao">Descrição do serviço <span class="opcional">o que foi feito no geral</span></label>
+        <textarea class="campo" id="f-descricao" data-campo="descricaoGeral" rows="4"
+          placeholder="O que foi feito no atendimento como um todo. Detalhe de uma máquina específica vai no cartão dela, abaixo."></textarea>
+      </div>
+    </div>
+
+    <h2 class="titulo">Máquinas</h2>
+    <div id="maquinas"></div>
+    <button type="button" class="btn btn--fantasma btn--largo" id="btn-add-maq">+ Adicionar máquina</button>
+
+    <div class="rodape-acao">
+      <button type="button" class="btn btn--acento btn--largo" id="btn-revisar">Revisar e assinar</button>
+    </div>
+  </section>
+
+  <!-- ═══ 3. Revisar e assinar ═════════════════════════════════ -->
+  <section class="tela" id="tela-revisar" aria-labelledby="t-revisar" hidden>
+    <button type="button" class="voltar" data-ir="preencher">‹ Editar</button>
+    <h2 class="titulo" id="t-revisar">Leia com o cliente</h2>
+
+    <article class="cartao leitura" id="leitura"></article>
+
+    <!-- Fechada quando a assinatura do técnico já está guardada: assim dá
+         para entregar o celular ao cliente sem ela aberta na frente dele. -->
+    <details class="dobra" id="dobra-tecnico">
+      <summary class="dobra__cab">
+        <span class="dobra__titulo">Assinatura do técnico</span>
+        <span class="dobra__estado" id="dobra-tecnico-estado"></span>
+        <span class="dobra__seta" aria-hidden="true">⌄</span>
+      </summary>
+      <div class="cartao dobra__corpo">
+        <div class="assinatura" id="ass-tecnico">
+          <canvas aria-label="Área para o técnico assinar com o dedo"></canvas>
+          <span class="assinatura__dica">Assine aqui com o dedo</span>
+        </div>
+        <div class="assinatura__acoes">
+          <label class="marcar"><input type="checkbox" id="lembrar"> Lembrar minha assinatura neste celular</label>
+          <div class="assinatura__btns">
+            <button type="button" class="btn btn--fantasma" data-deitar="tecnico">⤢ Deitado</button>
+            <button type="button" class="btn btn--fantasma" data-limpar="tecnico">Limpar</button>
+          </div>
+        </div>
+      </div>
+    </details>
+
+    <h2 class="titulo">Responsável do cliente</h2>
+    <div class="cartao">
+      <div class="cp">
+        <label for="f-resp-nome">Nome</label>
+        <input class="campo" id="f-resp-nome" data-campo="responsavel.nome" autocomplete="off" required>
+      </div>
+      <div class="cp">
+        <label for="f-resp-email">E-mail para receber o PDF</label>
+        <input class="campo" id="f-resp-email" data-campo="responsavel.email" type="email" multiple
+               inputmode="email" autocomplete="off" autocapitalize="off" spellcheck="false">
+      </div>
+      <div class="cp">
+        <label for="f-resp-doc">Documento <span class="opcional">opcional</span></label>
+        <input class="campo" id="f-resp-doc" data-campo="responsavel.documento" autocomplete="off">
+      </div>
+
+      <p class="declara">Ao assinar, confirmo que li este relatório.</p>
+      <div class="assinatura" id="ass-cliente">
+        <canvas aria-label="Área para o responsável do cliente assinar com o dedo"></canvas>
+        <span class="assinatura__dica">Assinatura do responsável</span>
+      </div>
+      <div class="assinatura__acoes">
+        <span></span>
+        <div class="assinatura__btns">
+          <button type="button" class="btn btn--fantasma" data-deitar="cliente">⤢ Deitado</button>
+          <button type="button" class="btn btn--fantasma" data-limpar="cliente">Limpar</button>
+        </div>
+      </div>
+    </div>
+
+    <p class="erro" id="erro-envio" role="alert" hidden></p>
+
+    <div class="rodape-acao">
+      <button type="button" class="btn btn--acento btn--largo" id="btn-finalizar">Finalizar e enviar</button>
+    </div>
+  </section>
+
+  <!-- ═══ 4. Enviado ═══════════════════════════════════════════ -->
+  <section class="tela" id="tela-enviado" aria-labelledby="t-enviado" hidden>
+    <div class="cartao feito">
+      <div class="feito__marca" id="feito-marca" aria-hidden="true">✓</div>
+      <h2 class="titulo" id="t-enviado">Relatório fechado</h2>
+      <p id="feito-txt"></p>
+      <p class="aviso" id="feito-aviso" hidden></p>
+      <div class="linha-botoes">
+        <a class="btn btn--fantasma" id="feito-pdf" target="_blank" rel="noopener">Abrir PDF</a>
+        <button type="button" class="btn btn--primario" id="btn-novo">Voltar ao início</button>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<!-- ═══ Pergunta de sim ou não ══════════════════════════════════
+     No lugar do confirm() do navegador. O Apps Script serve a página
+     dentro de um iframe de OUTRA ORIGEM, e o Chrome bloqueia
+     confirm() ali desde a versão 92: ele devolve "não" na hora, sem
+     perguntar — e todo botão que dependia dele ficava morto, sem erro
+     nenhum no console. Desenhada aqui, a pergunta funciona em
+     qualquer lugar. -->
+<div class="modal" id="pergunta" hidden role="dialog" aria-modal="true" aria-labelledby="pergunta-txt">
+  <div class="modal__cartao">
+    <p class="modal__txt" id="pergunta-txt"></p>
+    <div class="modal__acoes">
+      <button type="button" class="btn btn--fantasma" id="pergunta-nao">Cancelar</button>
+      <button type="button" class="btn btn--primario" id="pergunta-sim">Confirmar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ Assinar com o celular deitado ═══════════════════════════
+     O painel é girado 90° por CSS, não pelo sistema: funciona mesmo
+     com a rotação da tela travada, e no iPhone, onde travar a tela
+     em paisagem não é possível. A área de assinatura de verdade é
+     mudada de lugar para cá dentro e volta ao fechar — é a mesma
+     caixa, então o traço é o mesmo, não uma cópia. -->
+<div class="paisagem" id="paisagem" hidden>
+  <div class="paisagem__palco" id="paisagem-palco">
+    <p class="paisagem__titulo" id="paisagem-titulo"></p>
+    <div class="paisagem__area" id="paisagem-area"></div>
+    <div class="paisagem__acoes">
+      <button type="button" class="btn btn--fantasma" id="paisagem-limpar">Limpar</button>
+      <button type="button" class="btn btn--acento" id="paisagem-pronto">Pronto</button>
+    </div>
+  </div>
+</div>
+
+<!-- Erro de JS aparece AQUI, não só no console. Num celular no pátio
+     ninguém abre console: sem isto, um erro vira "o app travou" e não
+     há o que investigar. O técnico tira um print e manda. -->
+<div class="erro-fatal" id="erro-fatal" hidden>
+  <b>Erro no aplicativo</b>
+  <pre id="erro-fatal-txt"></pre>
+  <button type="button" class="btn btn--fantasma" id="erro-fatal-fechar">Fechar</button>
+</div>
+
+<div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+
+<script src="config.js"></script>
+<script src="servidor.js"></script>
+<script src="armazem.js"></script>
+<script src="fila.js"></script>
+<script src="rat.js"></script>
 </body>
 </html>
-<!-- -------- teste-ponte/index.html v1 -------- -->
+<!-- -------- index.html v2 -------- -->

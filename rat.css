@@ -1,0 +1,381 @@
+/* -------- rat.css v2 -------- */
+/* ═══════════════════════════════════════════════════════════════
+   ASSISTÊNCIA TÉCNICA — estilo
+
+   Feito para o celular, no pátio: dedo, sol e pressa.
+     • Alvos de toque de 48px, campos com 16px (menos que isso o
+       iPhone dá zoom ao tocar).
+     • Padrão Kalmar: Grape é o texto, fundo Ivory, superfícies
+       brancas. Vermelho só no logo, no botão principal e em erro.
+     • Três tamanhos de fonte: 20 · 16 · 13.
+   Fonte (build.py gera appscript/estilo.html a partir daqui).
+   ═══════════════════════════════════════════════════════════════ */
+
+:root {
+  --k-red:      #F30000;
+  --k-red-hover:#CC0000;
+  --k-grape:    #2C112D;
+  --k-white:    #FFFFFF;
+  --k-purple:   #BCADC8;
+  --k-clay:     #FEE8DB;
+  --k-ivory:    #F1F7ED;
+  --k-purple-30:#EBE6EF;
+  --k-clay-50:  #FFF4ED;
+  --k-muted:    #6B566C;   /* grape dessaturado — apoio, nunca corpo */
+  --k-line:     #E8E0E9;
+  --k-error-bg: #FFF0F0;
+  --k-error-fg: #9B1C1C;
+  --k-font:     'Stabil Grotesk', 'Noto Sans', Arial, Helvetica, sans-serif;
+
+  --fs-1: 20px;
+  --fs-2: 16px;
+  --fs-3: 13px;
+  --toque: 48px;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  font-family: var(--k-font);
+  font-size: var(--fs-2);
+  line-height: 1.35;
+  letter-spacing: -0.005em;
+  color: var(--k-grape);
+  background: var(--k-ivory);
+  -webkit-font-smoothing: antialiased;
+}
+button, input, select, textarea { font: inherit; color: inherit; letter-spacing: inherit; }
+h1, h2, p { margin: 0; }
+[hidden] { display: none !important; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+/* ── Topo ───────────────────────────────────────────────────── */
+.topo {
+  display: flex; align-items: center; gap: 12px;
+  padding: 12px max(16px, env(safe-area-inset-left)) 12px max(16px, env(safe-area-inset-right));
+  background: var(--k-white);
+  border-bottom: 1px solid var(--k-line);
+  position: relative;
+}
+body.carregando .topo::after {           /* sinal discreto de "buscando dados" */
+  content: ''; position: absolute; left: 0; right: 0; bottom: -1px; height: 2px;
+  background: var(--k-grape); transform-origin: left; animation: carregar 1.2s ease-in-out infinite;
+}
+@keyframes carregar { 0% { transform: scaleX(0); } 60% { transform: scaleX(.8); } 100% { transform: scaleX(1); opacity: 0; } }
+.marca-k { width: 32px; height: 25px; color: var(--k-red); flex-shrink: 0; }
+.topo__txt { min-width: 0; }
+.topo__titulo { font-size: var(--fs-2); font-weight: 500; line-height: 1.15; }
+.topo__sub { font-size: var(--fs-3); color: var(--k-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ── Página ─────────────────────────────────────────────────── */
+.pagina {
+  max-width: 640px; margin: 0 auto;
+  padding-block: 16px 40px;
+  padding-inline: max(16px, env(safe-area-inset-left)) max(16px, env(safe-area-inset-right));
+}
+.titulo { font-size: var(--fs-1); font-weight: 500; margin: 22px 0 10px; }
+.tela > .titulo:first-child, .voltar + .titulo { margin-top: 4px; }
+
+.cartao {
+  background: var(--k-white);
+  border: 1px solid var(--k-line); border-radius: 14px;
+  padding: 16px;
+}
+.cartao + .cartao { margin-top: 12px; }
+
+.voltar {
+  display: inline-flex; align-items: center; min-height: var(--toque);
+  margin: -8px 0 0 -4px; padding: 0 4px;
+  border: 0; background: none; color: var(--k-muted); font-size: var(--fs-3); cursor: pointer;
+}
+
+/* ── Botões ─────────────────────────────────────────────────── */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  min-height: var(--toque); padding: 10px 18px;
+  font-size: var(--fs-2); font-weight: 500; text-decoration: none;
+  border: 1px solid transparent; border-radius: 10px;
+  background: none; cursor: pointer;
+  transition: background .15s, border-color .15s;
+}
+.btn:focus-visible, .ordem:focus-visible, .voltar:focus-visible, .campo:focus-visible {
+  outline: 2px solid var(--k-grape); outline-offset: 2px;
+}
+.btn--acento   { background: var(--k-red); color: var(--k-white); }
+.btn--acento:hover { background: var(--k-red-hover); }
+.btn--primario { background: var(--k-grape); color: var(--k-white); }
+.btn--fantasma { border-color: var(--k-line); background: var(--k-white); color: var(--k-grape); }
+.btn--fantasma:hover { border-color: var(--k-purple); }
+.btn--largo    { width: 100%; }
+.btn[disabled] { opacity: .5; cursor: progress; }
+.btn--mini {
+  min-height: 36px; padding: 4px 12px; font-size: var(--fs-3);
+  border-color: var(--k-line); background: var(--k-white);
+}
+.linha-botoes { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 14px; }
+.linha-botoes .btn { flex: 1 1 140px; }
+
+/* Botão principal preso ao pé da tela: com o teclado e um relatório
+   comprido, ele não some lá embaixo. */
+.rodape-acao {
+  position: sticky; bottom: 0; z-index: 5;
+  margin: 20px -16px 0; padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
+  background: var(--k-ivory); border-top: 1px solid var(--k-line);
+}
+
+/* ── Campos ─────────────────────────────────────────────────── */
+.cp { margin-bottom: 14px; min-width: 0; }
+.cp:last-child { margin-bottom: 0; }
+.cp label { display: block; font-size: var(--fs-3); color: var(--k-muted); margin-bottom: 5px; }
+.opcional { opacity: .75; }
+.opcional::before { content: '· '; }
+.campo {
+  display: block; width: 100%; min-height: var(--toque);
+  padding: 11px 12px;
+  font-size: 16px;
+  background: var(--k-white);
+  border: 1px solid #D9CFDA; border-radius: 10px;
+  -webkit-appearance: none; appearance: none;
+}
+.campo:focus { border-color: var(--k-grape); outline: none; box-shadow: 0 0 0 1px var(--k-grape); }
+textarea.campo { resize: vertical; line-height: 1.4; min-height: 96px; }
+input[type="date"].campo { min-width: 0; }
+.campo.falta { border-color: var(--k-red); box-shadow: 0 0 0 1px var(--k-red); background: var(--k-error-bg); }
+.grade-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0 12px; }
+.grade-2 > .cp:last-child { margin-bottom: 14px; }
+.cartao > .grade-2:last-child > .cp { margin-bottom: 0; }
+@media (max-width: 380px) { .grade-2 { grid-template-columns: 1fr; } .grade-2 > .cp { margin-bottom: 14px; } }
+
+.busca { margin-bottom: 10px; }
+
+/* ── Técnico ────────────────────────────────────────────────── */
+.eu { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 8px; padding-block: 12px; }
+.eu__rotulo { font-size: var(--fs-3); color: var(--k-muted); }
+.eu__nome { font-weight: 500; }
+.eu select.campo { margin-top: 6px; }
+.eu > div { flex: 1; min-width: 0; }
+.eu__aviso { margin: 10px 0 0; }
+.eu__aviso b { font-weight: 500; overflow-wrap: anywhere; }
+/* App instalado: o técnico entra com o código (aba Tecnicos) */
+.eu > form { flex: 1; min-width: 0; }
+.eu__linha { display: flex; gap: 8px; margin-top: 6px; }
+.eu__linha .campo { flex: 1; min-width: 0; letter-spacing: .04em; }
+.eu__linha .campo:not(:placeholder-shown) { text-transform: uppercase; }   /* o exemplo fica como está */
+.eu__linha .btn { flex: none; }
+.eu__codigo .vazio { padding: 6px 2px 0; }
+
+/* ── Em andamento: um cartão por rascunho, "Descartar" ao lado ── */
+.rascunho { display: flex; gap: 8px; align-items: stretch; }
+.rascunho__abrir { flex: 1; min-width: 0; background: var(--k-clay-50); border-color: var(--k-clay); }
+.rascunho__abrir:hover { border-color: var(--k-purple); }
+.rascunho__descartar { flex: none; min-height: var(--toque); color: var(--k-muted); }
+
+/* ── Fila de envio: assinado e ainda não saiu ─────────────────── */
+.ordem--fila { cursor: default; border-style: dashed; border-color: var(--k-purple); }
+.ordem--fila:hover { border-color: var(--k-purple); }
+
+/* ── Enviados deste celular ───────────────────────────────────── */
+.enviados { list-style: none; margin: 0 0 4px; padding: 0; }
+.enviado {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  min-height: 40px; padding: 4px 2px; border-bottom: 1px solid var(--k-line);
+  font-size: var(--fs-3); color: var(--k-muted);
+}
+.enviado b { font-weight: 500; color: var(--k-grape); }
+.enviado__txt { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.enviado__txt::before { content: '✓ '; color: var(--k-grape); }
+.enviado__pdf { flex: none; padding: 8px 4px; color: var(--k-grape); }
+
+/* ── Lista de O.S. ──────────────────────────────────────────── */
+.ordens { display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; }
+.ordem {
+  display: block; width: 100%; text-align: left;
+  padding: 12px 14px; min-height: var(--toque);
+  background: var(--k-white); border: 1px solid var(--k-line); border-radius: 12px;
+  cursor: pointer;
+}
+.ordem:hover { border-color: var(--k-purple); }
+.ordem__cab { display: flex; justify-content: space-between; gap: 10px; align-items: baseline; }
+.ordem__os { font-weight: 500; }
+.ordem__data, .ordem__extra { font-size: var(--fs-3); color: var(--k-muted); }
+.ordem__cliente { display: block; margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ordem__extra { display: block; margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* O.S. já encerrada na planilha: só aparece quando alguém digita o
+   número dela, e vem apagada, com o aviso de que o próximo é o v2. */
+.ordem--feita { background: var(--k-purple-30); border-style: dashed; }
+.ordem--feita .ordem__os, .ordem--feita .ordem__cliente { color: var(--k-muted); }
+.ordem__selo { display: block; margin-top: 6px; font-size: var(--fs-3); font-weight: 500; color: var(--k-grape); }
+.vazio { font-size: var(--fs-3); color: var(--k-muted); padding: 10px 2px; }
+
+/* ── Máquinas ───────────────────────────────────────────────── */
+.maq { margin-bottom: 12px; }
+.maq__cab { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px; }
+.maq__titulo { font-weight: 500; }
+.grade-3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0 10px; }
+@media (max-width: 420px) {
+  .grade-3 { grid-template-columns: 1fr 1fr; }
+  .grade-3 > .cp:last-child { grid-column: 1 / -1; }
+}
+
+/* ── Leitura (o relatório como o cliente vai ler) ───────────── */
+.leitura dl { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 6px 14px; }
+.leitura dt { font-size: var(--fs-3); color: var(--k-muted); padding-top: 2px; }
+.leitura dd { margin: 0; font-weight: 500; min-width: 0; overflow-wrap: anywhere; }
+.leitura__servico { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--k-line); }
+.leitura__rotulo { display: block; font-size: var(--fs-3); color: var(--k-muted); margin-bottom: 3px; }
+.leitura__maq { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--k-line); }
+.leitura__maq-titulo { font-weight: 500; }
+.leitura__maq-ident { font-size: var(--fs-3); color: var(--k-muted); margin-top: 2px; }
+.leitura__maq-desc { margin-top: 8px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.texto { white-space: pre-wrap; overflow-wrap: anywhere; }
+
+/* ── Assinatura ─────────────────────────────────────────────── */
+.assinatura {
+  position: relative;
+  aspect-ratio: 5 / 2; max-width: 100%;
+  background: var(--k-white);
+  border: 1px dashed var(--k-purple); border-radius: 12px;
+  overflow: hidden;
+}
+.assinatura canvas {
+  position: absolute; inset: 0; width: 100%; height: 100%;
+  touch-action: none;                 /* o dedo desenha em vez de rolar a página */
+  cursor: crosshair;
+}
+.assinatura::after {                   /* linha de assinatura, como no papel */
+  content: ''; position: absolute; left: 8%; right: 8%; bottom: 24%;
+  border-bottom: 1px solid var(--k-line); pointer-events: none;
+}
+.assinatura__dica {
+  position: absolute; left: 0; right: 0; bottom: 8%;
+  text-align: center; font-size: var(--fs-3); color: var(--k-muted);
+  pointer-events: none; transition: opacity .2s;
+}
+.assinatura.assinada { border-style: solid; border-color: var(--k-line); }
+.assinatura.assinada .assinatura__dica { opacity: 0; }
+.assinatura.falta { border-color: var(--k-red); background: var(--k-error-bg); }
+.assinatura__acoes { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; margin-top: 10px; }
+.assinatura__acoes .btn { min-height: 40px; padding: 6px 14px; font-size: var(--fs-3); }
+.assinatura__btns { display: flex; gap: 8px; margin-left: auto; }
+
+/* ── Rodapé do app: versão e saída de emergência ────────────────── */
+.rodape-app {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between;
+  gap: 8px; margin-top: 28px; font-size: var(--fs-3); color: var(--k-muted);
+}
+.ligacao {
+  border: 0; background: none; padding: 6px 0;
+  font-size: var(--fs-3); color: var(--k-muted); text-decoration: underline; cursor: pointer;
+}
+
+/* ── Erro de JS, na tela ────────────────────────────────────────
+   Sem isto, erro no celular do pátio vira "travou" e não sobra pista. */
+.erro-fatal {
+  position: fixed; left: 8px; right: 8px; bottom: 8px; z-index: 70;
+  padding: 12px 14px;
+  font-size: var(--fs-3); color: var(--k-error-fg);
+  background: var(--k-error-bg); border: 1px solid #F5C2C2; border-radius: 12px;
+  box-shadow: 0 6px 24px rgba(44, 17, 45, .25);
+}
+.erro-fatal pre {
+  margin: 6px 0 10px; max-height: 30vh; overflow: auto;
+  white-space: pre-wrap; overflow-wrap: anywhere; font-size: 12px;
+}
+.erro-fatal .btn { min-height: 40px; padding: 6px 14px; }
+
+/* ── Pergunta de sim ou não ─────────────────────────────────────
+   Substitui o confirm() do navegador, que o Chrome bloqueia dentro do
+   iframe do Apps Script. */
+.modal {
+  position: fixed; inset: 0; z-index: 60;
+  display: flex; align-items: center; justify-content: center;
+  padding: 20px;
+  background: rgba(44, 17, 45, .55);
+}
+.modal__cartao {
+  width: 100%; max-width: 420px;
+  padding: 20px;
+  background: var(--k-white);
+  border-radius: 14px;
+  box-shadow: 0 10px 40px rgba(44, 17, 45, .3);
+}
+.modal__txt { margin-bottom: 18px; }
+.modal__acoes { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 10px; }
+.modal__acoes .btn { flex: 1 1 auto; min-width: 120px; }
+
+/* ── Assinar com o celular deitado ──────────────────────────────
+   O palco é girado 90° por CSS — o sistema continua achando que a
+   tela está em pé. Girou de verdade (rotação automática ligada)?
+   O JS tira o giro e o painel fica reto. */
+.paisagem { position: fixed; inset: 0; z-index: 50; background: var(--k-ivory); }
+.paisagem__palco {
+  position: absolute; top: 50%; left: 50%;
+  display: flex; flex-direction: column; gap: 8px;
+  padding: 12px 18px;
+  transform: translate(-50%, -50%);
+}
+.paisagem__palco--girado { transform: translate(-50%, -50%) rotate(90deg); }
+.paisagem__titulo { font-size: var(--fs-3); color: var(--k-muted); text-align: center; }
+/* o tamanho da caixa aqui dentro é medido no JS (medirPalco): tem de
+   manter a proporção 5:2, senão a assinatura sai achatada */
+.paisagem__area { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; }
+.paisagem__area .assinatura { max-width: none; }
+.paisagem__acoes { display: flex; justify-content: flex-end; gap: 10px; }
+.paisagem__acoes .btn { min-height: 44px; padding: 8px 24px; }
+body.sem-rolagem { overflow: hidden; }
+.marcar { display: flex; align-items: center; gap: 8px; font-size: var(--fs-3); color: var(--k-muted); cursor: pointer; }
+.marcar input { width: 20px; height: 20px; accent-color: var(--k-grape); margin: 0; }
+.declara { font-size: var(--fs-3); color: var(--k-muted); margin: 16px 0 8px; }
+
+/* ── Dobra (título que abre e fecha) ────────────────────────────
+   A assinatura do técnico fica aqui dentro: assinada uma vez, a dobra
+   nasce fechada e o celular vai para a mão do cliente já na parte dele. */
+.dobra { margin-top: 22px; }
+.dobra__cab {
+  display: flex; align-items: center; gap: 10px;
+  min-height: var(--toque); padding: 10px 16px;
+  background: var(--k-white);
+  border: 1px solid var(--k-line); border-radius: 14px;
+  cursor: pointer; list-style: none;
+}
+.dobra__cab::-webkit-details-marker { display: none; }   /* a seta é a nossa */
+.dobra__cab:focus-visible { outline: 2px solid var(--k-grape); outline-offset: 2px; }
+.dobra__titulo { font-size: var(--fs-1); font-weight: 500; }
+.dobra__estado { margin-left: auto; font-size: var(--fs-3); color: var(--k-muted); }
+.dobra__estado--ok { color: var(--k-grape); }
+.dobra__estado--falta { color: var(--k-error-fg); }
+.dobra__seta { color: var(--k-muted); line-height: 1; transition: transform .2s; }
+.dobra[open] .dobra__cab { border-radius: 14px 14px 0 0; border-bottom-color: transparent; padding-bottom: 4px; }
+.dobra[open] .dobra__seta { transform: rotate(180deg); }
+.dobra__corpo { border-radius: 0 0 14px 14px; border-top: 0; padding-top: 10px; }
+
+/* ── Mensagens ──────────────────────────────────────────────── */
+.aviso {
+  font-size: var(--fs-3); padding: 10px 12px; margin: 0 0 10px;
+  background: var(--k-clay-50); border: 1px solid var(--k-clay); border-radius: 10px;
+}
+.erro {
+  font-size: var(--fs-3); padding: 12px 14px; margin-top: 16px;
+  color: var(--k-error-fg); background: var(--k-error-bg);
+  border: 1px solid #F5C2C2; border-radius: 10px;
+}
+
+.feito { text-align: center; padding: 28px 18px; }
+.feito .titulo { margin: 10px 0 8px; }
+.feito p { overflow-wrap: anywhere; }
+.feito .aviso { text-align: left; margin-top: 14px; }
+.feito__marca {
+  width: 56px; height: 56px; margin: 0 auto; border-radius: 50%;
+  display: grid; place-items: center;
+  background: var(--k-purple-30); color: var(--k-grape); font-size: 28px; font-weight: 500;
+}
+
+.toast {
+  position: fixed; left: 50%; bottom: calc(88px + env(safe-area-inset-bottom)); z-index: 20;
+  transform: translateX(-50%); max-width: calc(100% - 32px);
+  padding: 10px 16px; border-radius: 10px;
+  background: var(--k-grape); color: var(--k-white); font-size: var(--fs-3);
+  box-shadow: 0 16px 48px rgba(44, 17, 45, .16);
+}
+/* -------- rat.css v2 -------- */
