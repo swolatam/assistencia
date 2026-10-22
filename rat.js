@@ -1,4 +1,4 @@
-// -------- rat.js v4 --------
+// -------- rat.js v6 --------
 /* ═══════════════════════════════════════════════════════════════
    ASSISTÊNCIA TÉCNICA — lógica da página (as telas)
 
@@ -32,7 +32,7 @@
      inicial. Serve para uma pergunta que já custou horas: "o que está
      no ar é o código novo ou o antigo?". No Live Server continua
      __VERSAO__ e aparece como "local". */
-  const VERSAO = 'site v2';
+  const VERSAO = 'site v3';
 
   const MAX_NA_LISTA     = 60;
   const MAX_ENVIADOS     = 5;      // quantos "enviados" a tela inicial mostra
@@ -631,7 +631,14 @@
         <div class="relogio__links">
           <button type="button" class="ligacao" data-rel="relatorio" data-id="${id}">Preencher relatório ›</button>
           <button type="button" class="ligacao" data-rel="ajustar" data-id="${id}">Ajustar horários ›</button>
-        </div>`;
+        </div>
+        ${Relogio.tambemAtivos().map(o => `<div class="relogio__outro">
+          <span>Também em serviço (começou em outro aparelho): <b>O.S. ${esc(o.os)}</b>, desde ${esc(quando(o.desde))}</span>
+          <span class="pausada__btns">
+            <button type="button" class="btn btn--mini" data-rel="pausar" data-id="${esc(o.id)}">Pausar</button>
+            <button type="button" class="btn btn--mini" data-rel="finalizar" data-id="${esc(o.id)}">Finalizar</button>
+            <button type="button" class="btn btn--mini" data-rel="ajustar" data-id="${esc(o.id)}">Horários</button>
+          </span></div>`).join('')}`;
     }
 
     const pausadas = Relogio.pausadas();
@@ -1230,6 +1237,7 @@
     $('#lembrar').checked = !!S.assinaturaLembrada;
     renderLeitura();
     $$('#tela-revisar [data-campo]').forEach(el => { el.value = lerCaminho(S.r, el.dataset.campo) || ''; el.classList.remove('falta'); });
+    renderEmails();
     padTec.carregar(S.r.assinaturas.tecnico);
     padCli.carregar(S.r.assinaturas.cliente);
     // já assinada, a dobra nasce fechada: o celular vai para a mão do
@@ -1242,6 +1250,27 @@
   // ── Finalizar ──────────────────────────────────────────────────
   const emailValido = s => s.split(/[,;\s]+/).filter(Boolean).every(e => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e));
 
+  /* E-mails do cliente: o primeiro é o do responsável; "+ Adicionar outro
+     e-mail" põe mais gente para receber o PDF. No rascunho e no envio
+     continuam num texto só ("a@x; b@y"), que o servidor já separa. */
+  function renderEmails() {
+    const lista = (S.r.responsavel.email || '').split(/[,;\s]+/).filter(Boolean);
+    $('#f-resp-email').value = lista[0] || '';
+    $('#f-resp-email').classList.remove('falta');
+    $('#emails-extra').innerHTML = lista.slice(1).map(campoEmailExtra).join('');
+  }
+  function campoEmailExtra(v) {
+    return `<div class="email-extra">
+      <input class="campo campo-email" type="email" value="${esc(v || '')}" inputmode="email" autocomplete="off"
+             autocapitalize="off" spellcheck="false" aria-label="Outro e-mail para receber o PDF">
+      <button type="button" class="btn btn--mini" data-tirar-email>Tirar</button></div>`;
+  }
+  function juntarEmails() {
+    S.r.responsavel.email = $$('#tela-revisar .campo-email').map(el => el.value.trim()).filter(Boolean).join('; ');
+    $('#erro-envio').hidden = true;
+    salvar();
+  }
+
   async function finalizar() {
     const erro = $('#erro-envio');
     erro.hidden = true;
@@ -1251,7 +1280,9 @@
     const r = S.r, t = tecnicoAtual();
     if (padTec.vazia()) marcar($('#ass-tecnico'), 'Falta a assinatura do técnico.');
     if (!r.responsavel.nome.trim()) marcar($('#f-resp-nome'), 'Falta o nome do responsável.');
-    if (r.responsavel.email.trim() && !emailValido(r.responsavel.email)) marcar($('#f-resp-email'), 'O e-mail do cliente está incompleto.');
+    $$('#tela-revisar .campo-email').forEach(el => {
+      if (el.value.trim() && !emailValido(el.value)) marcar(el, 'Tem e-mail do cliente incompleto.');
+    });
     if (padCli.vazia()) marcar($('#ass-cliente'), 'Falta a assinatura do responsável do cliente.');
     if (!t) faltas.push({ el: null, msg: 'Volte ao início e identifique-se como técnico.' });
 
@@ -1448,6 +1479,23 @@
       salvar();
     }));
 
+    // e-mails do cliente (os extras são redesenhados, então por delegação)
+    $('#tela-revisar').addEventListener('input', e => {
+      if (!e.target.classList.contains('campo-email')) return;
+      e.target.classList.remove('falta');
+      juntarEmails();
+    });
+    $('#btn-mais-email').addEventListener('click', () => {
+      $('#emails-extra').insertAdjacentHTML('beforeend', campoEmailExtra(''));
+      $$('#emails-extra .campo-email').pop().focus();
+    });
+    $('#emails-extra').addEventListener('click', e => {
+      const b = e.target.closest('[data-tirar-email]');
+      if (!b) return;
+      b.closest('.email-extra').remove();
+      juntarEmails();
+    });
+
     // campos das máquinas (a lista é redesenhada, então por delegação)
     $('#maquinas').addEventListener('input', e => {
       const el = e.target.closest('[data-k]');
@@ -1519,7 +1567,12 @@
     S.inicioFalhou = false;
     try {
       S.inicio = await Servidor.inicio(S.codigo);
+      // Os relógios do técnico (de qualquer aparelho) entram na gaveta do relógio e
+      // não no cache da lista de O.S.
+      const doServidor = S.inicio.relogios || [];
+      delete S.inicio.relogios;
       Armazem.pref.gravar('inicio', S.inicio);
+      try { await Relogio.mesclar(doServidor); } catch (e) { mostrarErroFatal('Relógios do servidor: ' + msgErro(e)); }
       aviso.hidden = !S.inicio.avisoOrdens;
       aviso.textContent = S.inicio.avisoOrdens || '';
     } catch (e) {
@@ -1621,4 +1674,4 @@
   prepararAssinaturas();
   iniciar();
 })();
-// -------- rat.js v4 --------
+// -------- rat.js v6 --------

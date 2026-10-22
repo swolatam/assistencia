@@ -1,4 +1,4 @@
-/* -------- rat.css v3 -------- */
+/* -------- rat.css v5 -------- */
 /* ═══════════════════════════════════════════════════════════════
    ASSISTÊNCIA TÉCNICA — estilo
 
@@ -127,6 +127,10 @@ body.carregando .topo::after {           /* sinal discreto de "buscando dados" *
 /* ── Campos ─────────────────────────────────────────────────── */
 .cp { margin-bottom: 14px; min-width: 0; }
 .cp:last-child { margin-bottom: 0; }
+/* e-mails extras do cliente: campo + botão de tirar na mesma linha */
+.email-extra { display: flex; gap: 8px; align-items: center; margin-top: 8px; }
+.email-extra .campo { flex: 1; min-width: 0; }
+#btn-mais-email { margin-top: 8px; }
 .cp label { display: block; font-size: var(--fs-3); color: var(--k-muted); margin-bottom: 5px; }
 .opcional { opacity: .75; }
 .opcional::before { content: '· '; }
@@ -336,6 +340,8 @@ input[type="date"].campo { min-width: 0; }
 .relogio__btns { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 14px 0 10px; }
 .relogio__links { display: flex; justify-content: space-between; gap: 10px; margin-top: 4px; }
 .relogio__links .ligacao { min-height: 40px; color: var(--k-grape); }
+/* outro relógio correndo (começou em outro aparelho): avisa, sem pausar sozinho */
+.relogio__outro { margin-top: 12px; padding-top: 10px; border-top: 1px dashed var(--k-purple); font-size: var(--fs-3); }
 .ordem--pausada { cursor: default; border-style: dashed; border-color: var(--k-purple); }
 .ordem--pausada:hover { border-color: var(--k-purple); }
 .pausada__btns { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 10px; }
@@ -424,4 +430,4 @@ body.sem-rolagem { overflow: hidden; }
   background: var(--k-grape); color: var(--k-white); font-size: var(--fs-3);
   box-shadow: 0 16px 48px rgba(44, 17, 45, .16);
 }
-/* -------- rat.css v3 -------- */
+/* -------- rat.css v5 -------- */

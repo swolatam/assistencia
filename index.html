@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- -------- index.html v3 -------- -->
+<!-- -------- index.html v4 -------- -->
 <html lang="pt-BR">
 <head>
 <meta charset="utf-8">
@@ -170,8 +170,10 @@
       </div>
       <div class="cp">
         <label for="f-resp-email">E-mail para receber o PDF</label>
-        <input class="campo" id="f-resp-email" data-campo="responsavel.email" type="email" multiple
+        <input class="campo campo-email" id="f-resp-email" type="email"
                inputmode="email" autocomplete="off" autocapitalize="off" spellcheck="false">
+        <div id="emails-extra"></div>
+        <button type="button" class="btn btn--mini" id="btn-mais-email">+ Adicionar outro e-mail</button>
       </div>
       <div class="cp">
         <label for="f-resp-doc">Documento <span class="opcional">opcional</span></label>
@@ -275,4 +277,4 @@
 <script src="rat.js"></script>
 </body>
 </html>
-<!-- -------- index.html v3 -------- -->
+<!-- -------- index.html v4 -------- -->

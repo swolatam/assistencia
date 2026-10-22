@@ -1,4 +1,4 @@
-// -------- relogio.js v1 --------
+// -------- relogio.js v2 --------
 /* ═══════════════════════════════════════════════════════════════
    RELÓGIO DA O.S. — as horas de serviço, marcadas no celular
 
@@ -131,13 +131,21 @@ window.Relogio = (function () {
     return t;
   }
 
-  const ativo = () => relogios.find(r => ATIVO.indexOf(resumo(r).estado) >= 0) || null;
+  // Em serviço ou no almoço, o mais recente primeiro. Normalmente é um só; dois
+  // aparecem quando o técnico começou em dois aparelhos sem sinal (ver mesclar).
+  const ativos = () => relogios.filter(r => ATIVO.indexOf(resumo(r).estado) >= 0)
+    .sort((a, b) => resumo(b).desde - resumo(a).desde);
+  const ativo = () => ativos()[0] || null;
 
   // Uma O.S. por vez: quem estava rodando pausa, com a mesma hora.
   async function pausarOutra(exceto, hora, os) {
-    const a = ativo();
-    if (a && a !== exceto) await registrar(a, { tipo: 'pausa', hora, motivo: 'Outra O.S. (' + os + ')' });
-    return a && a !== exceto ? a : null;
+    let primeira = null;
+    for (const a of ativos()) {
+      if (a === exceto) continue;
+      await registrar(a, { tipo: 'pausa', hora, motivo: 'Outra O.S. (' + os + ')' });
+      primeira = primeira || a;
+    }
+    return primeira;
   }
 
   // O relógio da O.S. que ainda não terminou (em serviço, almoço ou pausada)
@@ -257,11 +265,51 @@ window.Relogio = (function () {
   }
 
   // O relatório desta O.S. foi para a fila: o relógio terminado sai
-  // do celular (os toques já estão na fila ou na planilha).
+  // do celular (os toques já estão na fila ou na planilha). O id fica
+  // anotado por 30 dias: até o relatório chegar à planilha, o servidor
+  // ainda devolve esse relógio e ele não pode voltar para a tela.
   async function arquivar(id) {
     relogios = relogios.filter(r => r.id !== id);
     await Armazem.relogios.apagar(id);
+    try {
+      const corte = Date.now() - 30 * 864e5;
+      const lista = (await Armazem.pref.ler('arquivados')) || {};
+      Object.keys(lista).forEach(k => { if (lista[k] < corte) delete lista[k]; });
+      lista[id] = Date.now();
+      await Armazem.pref.gravar('arquivados', lista);
+    } catch (e) { /* sem a anotação, no pior caso o relógio reaparece uma vez */ }
     aoMudar();
+  }
+
+  /* O relógio é do técnico, não do aparelho. O servidor devolve os
+     relógios dele (refeitos da aba Apontamentos) ao abrir o app; aqui eles
+     são juntados com os do aparelho: relógio novo entra, relógio que já
+     existe ganha os toques que faltam. Nada local é apagado (um toque que
+     ainda está na fila deste aparelho continua valendo). */
+  async function mesclar(remotos) {
+    const arquivados = (await Armazem.pref.ler('arquivados')) || {};
+    let mudou = false;
+    for (const rem of remotos || []) {
+      if (!rem || !rem.id || arquivados[rem.id] || !Array.isArray(rem.toques) || !rem.toques.length) continue;
+      const local = relogios.find(r => r.id === rem.id);
+      if (local) {
+        const tem = new Set(local.toques.map(t => t.id));
+        const faltam = rem.toques.filter(t => !tem.has(t.id));
+        if (!faltam.length) continue;
+        await Armazem.relogios.gravar(Object.assign({}, local, { toques: local.toques.concat(faltam) }));
+        faltam.forEach(t => local.toques.push(t));
+      } else {
+        const r = {
+          id: rem.id, os: rem.os, cliente: rem.cliente || '', tecnico: rem.tecnico || '',
+          ordem: Object.assign({ os: rem.os, cliente: rem.cliente || '', modelo: '', serie: '', descricao: '' }, rem.ordem || {}),
+          toques: rem.toques.slice(), criadoEm: Math.min.apply(null, rem.toques.map(t => t.criadoEm || t.hora))
+        };
+        await Armazem.relogios.gravar(r);
+        relogios.push(r);
+      }
+      mudou = true;
+    }
+    if (mudou) aoMudar();
   }
 
   async function iniciarModulo(opcoes) {
@@ -289,7 +337,10 @@ window.Relogio = (function () {
     lancarPorFora,
     arquivar,
     // o que a tela mostra
+    mesclar,
     atual:      () => { const a = ativo(); return a ? resumo(a) : null; },
+    // também em serviço (começou em outro aparelho): a tela lista, sem pausar sozinha
+    tambemAtivos: () => ativos().slice(1).map(r => resumo(r)),
     pausadas:   () => lista().filter(r => r.estado === 'pausada'),
     terminados: () => lista().filter(r => r.estado === 'finalizado' || r.estado === 'cancelado'),
     esquecidos: () => lista().filter(r => r.esquecido),
@@ -298,4 +349,4 @@ window.Relogio = (function () {
     ordem:      id => { const r = relogios.find(x => x.id === id); return r ? Object.assign({}, r.ordem) : null; }
   };
 })();
-// -------- relogio.js v1 --------
+// -------- relogio.js v2 --------
