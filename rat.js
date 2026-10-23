@@ -1,4 +1,4 @@
-// -------- rat.js v6 --------
+// -------- rat.js v7 --------
 /* ═══════════════════════════════════════════════════════════════
    ASSISTÊNCIA TÉCNICA — lógica da página (as telas)
 
@@ -32,7 +32,7 @@
      inicial. Serve para uma pergunta que já custou horas: "o que está
      no ar é o código novo ou o antigo?". No Live Server continua
      __VERSAO__ e aparece como "local". */
-  const VERSAO = 'site v3';
+  const VERSAO = 'site v4';
 
   const MAX_NA_LISTA     = 60;
   const MAX_ENVIADOS     = 5;      // quantos "enviados" a tela inicial mostra
@@ -242,7 +242,9 @@
       os: o.os || '', cliente: o.cliente || '', data: hojeIso(), dataFim: '',
       servico: o.descricao || '',   // o que a O.S. pediu
       descricaoGeral: '',           // o que foi feito, valendo para o atendimento todo
-      maquinas: [maqVazia({ modelo: o.modelo, serie: o.serie })],
+      // o que a O.S. dizia (só o que veio preenchido vira campo travado, com lápis) e as correções feitas
+      origem: { cliente: o.cliente || '', servico: o.descricao || '' }, corr: {},
+      maquinas: [Object.assign(maqVazia({ modelo: o.modelo, serie: o.serie }), { orig: { modelo: o.modelo || '', serie: o.serie || '' } })],
       responsavel: { nome: '', documento: '', email: '' },
       assinaturas: { tecnico: null, cliente: null },   // traços, não imagem: redesenha em qualquer tamanho
       relogio: o.relogio || '',     // o relógio da O.S. (relogio.js), quando o relatório nasceu dele
@@ -892,7 +894,84 @@
   // ── Tela 2: preencher ──────────────────────────────────────────
   function preencherCampos() {
     $$('[data-campo]').forEach(el => { el.value = lerCaminho(S.r, el.dataset.campo) || ''; el.classList.remove('falta'); });
+    aplicarTravas();
     renderMaquinas();
+  }
+
+  /* ── Corrigir dado da O.S. (lápis) ────────────────────────────────
+     Cliente, serviço solicitado e modelo/série da máquina vêm da O.S.: ficam
+     travados. Se estiver errado, o técnico toca no lápis, escreve o valor certo
+     e POR QUE estava errado. O valor corrigido vai para o relatório; o motivo
+     vai só para o sistema (coluna "Correções da O.S." da aba Relatorios, que
+     a NewSimova lê para avisar o gestor) e NUNCA para o PDF nem para o e-mail.
+     Rascunho antigo, O.S. digitada à mão e máquina acrescentada ficam livres. */
+  const NOME_CAMPO = { cliente: 'Cliente', servico: 'Serviço solicitado', modelo: 'Modelo', serie: 'Série' };
+  const lapis = (k, i) => `<button type="button" class="lapis" data-corrigir="${k}"${i == null ? '' : ` data-maq="${i}"`} ` +
+    `aria-label="Corrigir ${NOME_CAMPO[k].toLowerCase()}">✎</button>`;
+  const marcaCorrigido = c => (c ? '<span class="corrigido">corrigido</span>' : '');
+  const travadoMaq = (m, k) => !!(m.orig && m.orig[k]);
+
+  function aplicarTravas() {
+    [['cliente', '#f-cliente'], ['servico', '#f-servico']].forEach(([k, sel]) => {
+      const campo = $(sel), rot = campo.closest('.cp').querySelector('label');
+      rot.querySelectorAll('.lapis, .corrigido').forEach(n => n.remove());
+      const trava = !!(S.r.origem && S.r.origem[k]);
+      campo.readOnly = trava;
+      campo.classList.toggle('trava', trava);
+      if (trava) rot.insertAdjacentHTML('beforeend', ' ' + lapis(k) + marcaCorrigido(S.r.corr && S.r.corr[k]));
+    });
+  }
+
+  async function corrigirCampo(k, i) {
+    const alvo = i == null ? S.r : S.r.maquinas[i];
+    if (!alvo) return;
+    const origem = i == null ? S.r.origem[k] : alvo.orig[k];
+    const atual = alvo[k];
+    const nome = NOME_CAMPO[k] + (i == null ? '' : ` (máquina ${i + 1})`);
+    const entrada = k === 'servico'
+      ? `<textarea class="campo" id="cx-novo" rows="3" maxlength="2000">${esc(atual)}</textarea>`
+      : `<input class="campo" id="cx-novo" value="${esc(atual)}" maxlength="120" autocomplete="off">`;
+    const res = await abrirCaixa(`
+      <p class="modal__txt"><b>Corrigir: ${esc(nome)}</b><br>
+        <span class="caixa__nota">O motivo fica só no sistema da Kalmar. O cliente não vê.</span></p>
+      <div class="cp"><label>Está assim na O.S.</label><div class="texto">${esc(origem)}</div></div>
+      <div class="cp"><label for="cx-novo">Valor correto</label>${entrada}</div>
+      <div class="cp"><label for="cx-motivo">Por que está errado?</label>
+        <textarea class="campo" id="cx-motivo" rows="2" maxlength="300" placeholder="Ex.: a plaqueta da máquina tem outro número"></textarea></div>
+      <p class="erro" hidden></p>
+      <div class="modal__acoes">
+        <button type="button" class="btn btn--fantasma" data-fechar>Cancelar</button>
+        <button type="button" class="btn btn--primario" id="cx-ok">Salvar correção</button>
+      </div>`, corpo => {
+      corpo.querySelector('#cx-ok').addEventListener('click', () => {
+        const novo = corpo.querySelector('#cx-novo').value.trim();
+        const motivo = corpo.querySelector('#cx-motivo').value.trim();
+        if (!novo) { erroCaixa('Escreva o valor correto.'); return; }
+        if (novo !== origem && motivo.length < 5) { erroCaixa('Explique por que está errado (pelo menos 5 letras).'); return; }
+        fecharCaixa({ novo, motivo });
+      });
+      setTimeout(() => corpo.querySelector('#cx-novo').focus(), 50);
+    });
+    if (!res) return;
+    const corr = alvo.corr = alvo.corr || {};
+    if (res.novo === origem) delete corr[k];     // voltou ao que a O.S. dizia: não há correção
+    else corr[k] = { de: origem, para: res.novo, motivo: res.motivo, em: Date.now() };
+    alvo[k] = res.novo;
+    salvar();
+    preencherCampos();
+    toast('Corrigido. O motivo vai só para o sistema.');
+  }
+
+  // As correções de verdade (valor final ≠ o da O.S.), para o servidor gravar na planilha.
+  function listarCorrecoes(r) {
+    const out = [];
+    const junta = (alvo, maquina, campos) => campos.forEach(k => {
+      const c = alvo.corr && alvo.corr[k];
+      if (c && alvo[k] !== c.de) out.push({ campo: k, maquina, de: c.de, para: String(alvo[k]).trim(), motivo: c.motivo });
+    });
+    junta(r, '', ['cliente', 'servico']);
+    r.maquinas.forEach((m, i) => junta(m, i + 1, ['modelo', 'serie']));
+    return out;
   }
 
   function renderMaquinas() {
@@ -904,8 +983,8 @@
           ${lista.length > 1 ? `<button type="button" class="btn btn--mini" data-remover="${i}">Remover</button>` : ''}
         </div>
         <div class="cp">
-          <label for="m${i}-modelo">Modelo</label>
-          <input class="campo" id="m${i}-modelo" data-k="modelo" value="${esc(m.modelo)}" autocomplete="off" placeholder="Ex.: Kalmar K2Ti Port">
+          <label for="m${i}-modelo">Modelo${travadoMaq(m, 'modelo') ? ' ' + lapis('modelo', i) + marcaCorrigido(m.corr && m.corr.modelo) : ''}</label>
+          <input class="campo${travadoMaq(m, 'modelo') ? ' trava' : ''}" id="m${i}-modelo" data-k="modelo" value="${esc(m.modelo)}" autocomplete="off"${travadoMaq(m, 'modelo') ? ' readonly' : ''} placeholder="Ex.: Kalmar K2Ti Port">
         </div>
         <div class="grade-3">
           <div class="cp">
@@ -913,8 +992,8 @@
             <input class="campo" id="m${i}-frota" data-k="frota" value="${esc(m.frota)}" autocomplete="off">
           </div>
           <div class="cp">
-            <label for="m${i}-serie">Série</label>
-            <input class="campo" id="m${i}-serie" data-k="serie" value="${esc(m.serie)}" autocomplete="off">
+            <label for="m${i}-serie">Série${travadoMaq(m, 'serie') ? ' ' + lapis('serie', i) + marcaCorrigido(m.corr && m.corr.serie) : ''}</label>
+            <input class="campo${travadoMaq(m, 'serie') ? ' trava' : ''}" id="m${i}-serie" data-k="serie" value="${esc(m.serie)}" autocomplete="off"${travadoMaq(m, 'serie') ? ' readonly' : ''}>
           </div>
           <div class="cp">
             <label for="m${i}-horimetro">Horímetro</label>
@@ -1352,7 +1431,8 @@
       },
       assinaturas: { tecnico: padTec.paraPng(), cliente: padCli.paraPng() },
       horas: rel.minutos,     // minutos em serviço, já com as correções
-      relogio: rel.id
+      relogio: rel.id,
+      correcoes: listarCorrecoes(r)   // só para o sistema: nunca vai para o PDF nem para o e-mail
     };
     // o código de quem fechou vai junto para a fila: se outro técnico
     // entrar neste celular antes de o sinal voltar, o relatório continua
@@ -1494,6 +1574,12 @@
       if (!b) return;
       b.closest('.email-extra').remove();
       juntarEmails();
+    });
+
+    // lápis: corrigir dado que veio da O.S. (cliente, serviço, modelo e série da máquina)
+    document.addEventListener('click', e => {
+      const b = e.target.closest('[data-corrigir]');
+      if (b && S.r) corrigirCampo(b.dataset.corrigir, b.dataset.maq == null ? null : +b.dataset.maq);
     });
 
     // campos das máquinas (a lista é redesenhada, então por delegação)
@@ -1674,4 +1760,4 @@
   prepararAssinaturas();
   iniciar();
 })();
-// -------- rat.js v6 --------
+// -------- rat.js v7 --------

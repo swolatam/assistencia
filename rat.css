@@ -1,4 +1,4 @@
-/* -------- rat.css v5 -------- */
+/* -------- rat.css v6 -------- */
 /* ═══════════════════════════════════════════════════════════════
    ASSISTÊNCIA TÉCNICA — estilo
 
@@ -340,6 +340,10 @@ input[type="date"].campo { min-width: 0; }
 .relogio__btns { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 14px 0 10px; }
 .relogio__links { display: flex; justify-content: space-between; gap: 10px; margin-top: 4px; }
 .relogio__links .ligacao { min-height: 40px; color: var(--k-grape); }
+/* dado da O.S. travado (lápis para corrigir, com motivo) */
+.campo.trava { background: var(--k-purple-30); }
+.lapis { border: 0; background: none; padding: 0 6px; min-width: 32px; min-height: 32px; vertical-align: middle; font-size: var(--fs-2); line-height: 1; color: var(--k-grape); cursor: pointer; }
+.corrigido { margin-left: 2px; padding: 0 6px; font-size: 11px; color: var(--k-muted); border: 1px solid var(--k-line); border-radius: 6px; }
 /* outro relógio correndo (começou em outro aparelho): avisa, sem pausar sozinho */
 .relogio__outro { margin-top: 12px; padding-top: 10px; border-top: 1px dashed var(--k-purple); font-size: var(--fs-3); }
 .ordem--pausada { cursor: default; border-style: dashed; border-color: var(--k-purple); }
@@ -430,4 +434,4 @@ body.sem-rolagem { overflow: hidden; }
   background: var(--k-grape); color: var(--k-white); font-size: var(--fs-3);
   box-shadow: 0 16px 48px rgba(44, 17, 45, .16);
 }
-/* -------- rat.css v5 -------- */
+/* -------- rat.css v6 -------- */
