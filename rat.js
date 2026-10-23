@@ -1,4 +1,4 @@
-// -------- rat.js v7 --------
+// -------- rat.js v8 --------
 /* ═══════════════════════════════════════════════════════════════
    ASSISTÊNCIA TÉCNICA — lógica da página (as telas)
 
@@ -32,7 +32,7 @@
      inicial. Serve para uma pergunta que já custou horas: "o que está
      no ar é o código novo ou o antigo?". No Live Server continua
      __VERSAO__ e aparece como "local". */
-  const VERSAO = 'site v4';
+  const VERSAO = 'site v5';
 
   const MAX_NA_LISTA     = 60;
   const MAX_ENVIADOS     = 5;      // quantos "enviados" a tela inicial mostra
@@ -244,6 +244,8 @@
       descricaoGeral: '',           // o que foi feito, valendo para o atendimento todo
       // o que a O.S. dizia (só o que veio preenchido vira campo travado, com lápis) e as correções feitas
       origem: { cliente: o.cliente || '', servico: o.descricao || '' }, corr: {},
+      // e-mail do contato da O.S. (NewSimova): vem como cópia já marcada; o técnico pode desmarcar
+      contatoEmail: o.contatoEmail || '', enviarContato: !!o.contatoEmail,
       maquinas: [Object.assign(maqVazia({ modelo: o.modelo, serie: o.serie }), { orig: { modelo: o.modelo || '', serie: o.serie || '' } })],
       responsavel: { nome: '', documento: '', email: '' },
       assinaturas: { tecnico: null, cliente: null },   // traços, não imagem: redesenha em qualquer tamanho
@@ -537,6 +539,11 @@
   }
 
   function novoRelatorio(ordem) {
+    // o relógio guarda só o básico da O.S.: o e-mail do contato vem da lista
+    if (!ordem.contatoEmail) {
+      const da = (S.inicio.ordens || []).find(x => x.os === ordem.os);
+      if (da && da.contatoEmail) ordem = Object.assign({}, ordem, { contatoEmail: da.contatoEmail });
+    }
     S.r = novoRascunho(ordem);
     S.rascunhos.push(S.r);
     salvar();
@@ -1337,6 +1344,13 @@
     $('#f-resp-email').value = lista[0] || '';
     $('#f-resp-email').classList.remove('falta');
     $('#emails-extra').innerHTML = lista.slice(1).map(campoEmailExtra).join('');
+    // contato da O.S.: cópia já marcada (some se a O.S. não tem contato)
+    const ce = S.r.contatoEmail || '';
+    $('#linha-contato-email').hidden = !ce;
+    if (ce) {
+      $('#chk-contato-email').checked = !!S.r.enviarContato;
+      $('#txt-contato-email').textContent = 'Também enviar para ' + ce + ' (contato da O.S.)';
+    }
   }
   function campoEmailExtra(v) {
     return `<div class="email-extra">
@@ -1376,7 +1390,7 @@
       }
       return;
     }
-    if (!r.responsavel.email.trim() &&
+    if (!r.responsavel.email.trim() && !(r.contatoEmail && r.enviarContato) &&
         !await perguntar('Sem e-mail do cliente, o PDF vai só para você e para a equipe. Enviar assim?',
                          'Enviar assim')) {
       $('#f-resp-email').focus();
@@ -1432,6 +1446,7 @@
       assinaturas: { tecnico: padTec.paraPng(), cliente: padCli.paraPng() },
       horas: rel.minutos,     // minutos em serviço, já com as correções
       relogio: rel.id,
+      emailsExtra: r.contatoEmail && r.enviarContato ? r.contatoEmail : '',   // contato da O.S.: recebe o PDF
       correcoes: listarCorrecoes(r)   // só para o sistema: nunca vai para o PDF nem para o e-mail
     };
     // o código de quem fechou vai junto para a fila: se outro técnico
@@ -1565,6 +1580,7 @@
       e.target.classList.remove('falta');
       juntarEmails();
     });
+    $('#chk-contato-email').addEventListener('change', e => { S.r.enviarContato = e.target.checked; salvar(); });
     $('#btn-mais-email').addEventListener('click', () => {
       $('#emails-extra').insertAdjacentHTML('beforeend', campoEmailExtra(''));
       $$('#emails-extra .campo-email').pop().focus();
@@ -1760,4 +1776,4 @@
   prepararAssinaturas();
   iniciar();
 })();
-// -------- rat.js v7 --------
+// -------- rat.js v8 --------
