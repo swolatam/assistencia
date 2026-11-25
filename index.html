@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- -------- index.html v5 -------- -->
+<!-- -------- index.html v6 -------- -->
 <html lang="pt-BR">
 <head>
 <meta charset="utf-8">
@@ -81,9 +81,10 @@
     <!-- Saída de emergência. Fica sempre aqui, discreta: quando alguma
          coisa trava no celular do técnico no pátio, ele zera e segue. -->
     <p class="rodape-app">
-      <span id="carimbo"></span>
+      <button type="button" class="ligacao" id="carimbo"></button>
       <button type="button" class="ligacao" id="btn-zerar">Zerar os dados deste celular</button>
     </p>
+    <p class="vazio" id="versoes-arquivos" hidden></p>
   </section>
 
   <!-- ═══ 2. Preencher ═════════════════════════════════════════ -->
@@ -270,6 +271,7 @@
 
 <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
 
+<script src="i18n.js"></script>
 <script src="config.js"></script>
 <script src="servidor.js"></script>
 <script src="armazem.js"></script>
@@ -278,4 +280,4 @@
 <script src="rat.js"></script>
 </body>
 </html>
-<!-- -------- index.html v5 -------- -->
+<!-- -------- index.html v6 -------- -->

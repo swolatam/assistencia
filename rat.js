@@ -1,4 +1,4 @@
-// -------- rat.js v8 --------
+// -------- rat.js v9 --------
 /* ═══════════════════════════════════════════════════════════════
    ASSISTÊNCIA TÉCNICA — lógica da página (as telas)
 
@@ -27,12 +27,16 @@
 (function () {
   'use strict';
 
-  /* Carimbo de versão. O build.py troca isto pela versão do
-     logica.html que gerou ("logica v4"), e o app mostra no pé da tela
-     inicial. Serve para uma pergunta que já custou horas: "o que está
-     no ar é o código novo ou o antigo?". No Live Server continua
-     __VERSAO__ e aparece como "local". */
-  const VERSAO = 'site v5';
+  /* Versão do PROJETO (Vxx.yy, ver VERSOES.md): sobe a cada entrega. O pé
+     da tela inicial mostra só "Projeto V10.00"; tocar nele mostra a versão
+     de cada arquivo, para achar o que ficou velho no Apps Script. As
+     versões dos arquivos o build.py (Apps Script) e o publicar.py (site)
+     trocam em __VERSOES__; no Live Server a lista fica vazia. */
+  const VERSAO_PROJETO = 'V10.00';
+  const VERSOES_TXT = '{"rat.css": "v6", "i18n.js": "v1", "servidor.js": "v5", "armazem.js": "v3", "fila.js": "v2", "relogio.js": "v3", "sw.js": "v4", "index.html": "v6"}';
+  const VERSOES_ARQUIVOS = VERSOES_TXT.indexOf('__') === 0 ? {} : JSON.parse(VERSOES_TXT);
+
+  const tx = I18n.t;   // frase em português → idioma da tela (i18n.js)
 
   const MAX_NA_LISTA     = 60;
   const MAX_ENVIADOS     = 5;      // quantos "enviados" a tela inicial mostra
@@ -48,8 +52,8 @@
   const $$ = sel => Array.from(document.querySelectorAll(sel));
   const horimetro = h => /^\d+([.,]\d+)?$/.test(String(h || '').trim()) ? `${String(h).trim()} h` : String(h || '');
   // "14/09/2026" ou "14/09/2026 a 15/09/2026"
-  const periodo = (de, ate) => br(de) + (ate && ate !== de ? ' a ' + br(ate) : '');
-  const plural  = (n, um, varios) => `${n} ${n === 1 ? um : varios}`;
+  const periodo = (de, ate) => (ate && ate !== de ? tx('{de} a {ate}', { de: br(de), ate: br(ate) }) : br(de));
+  const plural  = (n, um, varios) => `${n} ${tx(n === 1 ? um : varios)}`;
 
   // "hoje 14:32", "ontem 09:10", "12/09 16:00"
   function quando(ms) {
@@ -57,8 +61,8 @@
     const d = new Date(ms), hoje = new Date(), ontem = new Date(Date.now() - 864e5);
     const hora = `${pad(d.getHours())}:${pad(d.getMinutes())}`;
     const mesmoDia = (a, b) => a.toDateString() === b.toDateString();
-    if (mesmoDia(d, hoje))  return 'hoje ' + hora;
-    if (mesmoDia(d, ontem)) return 'ontem ' + hora;
+    if (mesmoDia(d, hoje))  return tx('hoje') + ' ' + hora;
+    if (mesmoDia(d, ontem)) return tx('ontem') + ' ' + hora;
     return `${pad(d.getDate())}/${pad(d.getMonth() + 1)} ${hora}`;
   }
 
@@ -106,10 +110,10 @@
       toques && plural(toques, 'registro de horário que ainda não subiu', 'registros de horário que ainda não subiram')
     ].filter(Boolean);
     if (!await perguntar(
-      'Apagar o que este app guardou NESTE celular? ' +
-      (perde.length ? `Isso apaga ${perde.join(' e ')}. ` : '') +
-      'Também somem sua assinatura lembrada e a lista de O.S. guardada. ' +
-      'Nada do que já foi enviado se perde.', 'Zerar este celular')) return;
+      tx('Apagar o que este app guardou NESTE celular?') + ' ' +
+      (perde.length ? tx('Isso apaga {lista}.', { lista: perde.join(tx(' e ')) }) + ' ' : '') +
+      tx('Também somem sua assinatura lembrada e a lista de O.S. guardada.') + ' ' +
+      tx('Nada do que já foi enviado se perde.'), tx('Zerar este celular'))) return;
     await Armazem.zerar();
     location.reload();
   }
@@ -127,7 +131,7 @@
   function perguntar(texto, textoSim) {
     const caixa = $('#pergunta'), sim = $('#pergunta-sim');
     $('#pergunta-txt').textContent = texto;
-    sim.textContent = textoSim || 'Confirmar';
+    sim.textContent = textoSim || tx('Confirmar');
     caixa.hidden = false;
     document.body.classList.add('sem-rolagem');
     sim.focus();
@@ -274,7 +278,7 @@
     const lista = Array.from(sujos);
     sujos.clear();
     return Promise.all(lista.map(r => Armazem.rascunhos.gravar(r)
-      .catch(e => mostrarErroFatal('Não consegui guardar o rascunho neste celular: ' + msgErro(e)))));
+      .catch(e => mostrarErroFatal(tx('Não consegui guardar o rascunho neste celular: ') + msgErro(e)))));
   }
 
   async function tirarRascunho(r) {
@@ -309,11 +313,10 @@
     const fora = S.inicio.emailDesconhecido;
     eu.innerHTML = `<div><label class="eu__rotulo" for="sel-tec">Técnico</label>
       <select class="campo" id="sel-tec">
-        <option value="">Escolha seu nome…</option>
+        <option value="">${esc(tx('Escolha seu nome…'))}</option>
         ${S.inicio.tecnicos.map(t => `<option${atual && atual.nome === t.nome ? ' selected' : ''}>${esc(t.nome)}</option>`).join('')}
       </select>
-      ${fora ? `<p class="aviso eu__aviso">Seu e-mail <b>${esc(fora)}</b> não está na aba Tecnicos da planilha.
-        Peça para incluírem — sem isso o relatório não fecha.</p>` : ''}</div>`;
+      ${fora ? `<p class="aviso eu__aviso">${tx('Seu e-mail <b>{email}</b> não está na aba Tecnicos da planilha. Peça para incluírem — sem isso o relatório não fecha.', { email: esc(fora) })}</p>` : ''}</div>`;
     $('#sel-tec').addEventListener('change', e => {
       S.tecnicoEscolhido = e.target.value;
       Armazem.pref.gravar('tecnico', e.target.value);
@@ -365,7 +368,7 @@
       return false;
     }
     const sel = $('#sel-tec');
-    toast(S.inicio.tecnicos.length ? 'Escolha seu nome primeiro.' : 'A lista de técnicos ainda não carregou.');
+    toast(S.inicio.tecnicos.length ? tx('Escolha seu nome primeiro.') : tx('A lista de técnicos ainda não carregou.'));
     if (sel) { sel.classList.add('falta'); sel.focus(); }
     return false;
   }
@@ -388,14 +391,14 @@
     $('#fila').hidden = !itens.length;
     if (!itens.length) return;
     $('#fila-txt').textContent = navigator.onLine === false
-      ? 'Sem sinal. Saem sozinhos quando a conexão voltar, com o app aberto; se fechar, saem na próxima vez que abrir.'
-      : 'Saem sozinhos assim que o servidor responder.';
+      ? tx('Sem sinal. Saem sozinhos quando a conexão voltar, com o app aberto; se fechar, saem na próxima vez que abrir.')
+      : tx('Saem sozinhos assim que o servidor responder.');
     $('#lista-fila').innerHTML = itens.map(i => {
-      const estado = i.enviando ? 'Enviando…'
-        : i.ultimoErro ? `Não foi: ${i.ultimoErro} Tenta de novo ${quando(i.proximaEm)}.`
-        : 'Esperando para enviar.';
+      const estado = i.enviando ? tx('Enviando…')
+        : i.ultimoErro ? tx('Não foi: {erro} Tenta de novo {quando}.', { erro: tx(i.ultimoErro), quando: quando(i.proximaEm) })
+        : tx('Esperando para enviar.');
       return `<div class="ordem ordem--fila">
-        <span class="ordem__cab"><span class="ordem__os">${esc(i.envio.os)}</span><span class="ordem__data">fechado ${esc(quando(i.criadoEm))}</span></span>
+        <span class="ordem__cab"><span class="ordem__os">${esc(i.envio.os)}</span><span class="ordem__data">${esc(tx('fechado {quando}', { quando: quando(i.criadoEm) }))}</span></span>
         <span class="ordem__cliente">${esc(i.envio.cliente || '—')}</span>
         <span class="ordem__selo">${esc(estado)}</span>
       </div>`;
@@ -407,18 +410,18 @@
     const lista = S.rascunhos.slice().sort((a, b) => (b.atualizadoEm || 0) - (a.atualizadoEm || 0));
     $('#andamento').hidden = !lista.length;
     $('#lista-andamento').innerHTML = lista.map(r => {
-      const etapa = r.etapa !== 'revisar' ? 'preenchendo'
-        : r.assinaturas.cliente ? 'cliente já assinou' : 'na revisão';
+      const etapa = r.etapa !== 'revisar' ? tx('preenchendo')
+        : r.assinaturas.cliente ? tx('cliente já assinou') : tx('na revisão');
       const rel = relogioDoRascunho(r);
-      const horas = rel ? ` · ${duracao(rel.minutos)} de serviço` : '';
+      const horas = rel ? ` · ${tx('{t} de serviço', { t: duracao(rel.minutos) })}` : '';
       return `<div class="rascunho">
         <button type="button" class="ordem rascunho__abrir" data-abrir="${esc(r.id)}">
-          <span class="ordem__cab"><span class="ordem__os">${esc(r.os || 'sem O.S.')}</span><span class="ordem__data">${esc(quando(r.atualizadoEm))}</span></span>
+          <span class="ordem__cab"><span class="ordem__os">${esc(r.os || tx('sem O.S.'))}</span><span class="ordem__data">${esc(quando(r.atualizadoEm))}</span></span>
           <span class="ordem__cliente">${esc(r.cliente || '—')}</span>
           <span class="ordem__extra">${plural(r.maquinas.length, 'máquina', 'máquinas')} · ${etapa}${esc(horas)}</span>
         </button>
         <button type="button" class="btn btn--mini rascunho__descartar" data-descartar="${esc(r.id)}"
-          aria-label="Descartar o relatório da O.S. ${esc(r.os || 'sem número')}">Descartar</button>
+          aria-label="${esc(tx('Descartar o relatório da O.S. {os}', { os: r.os || tx('sem número') }))}">${esc(tx('Descartar'))}</button>
       </div>`;
     }).join('');
   }
@@ -442,9 +445,8 @@
     const r = S.rascunhos.find(x => x.id === id);
     if (!r) return;
     const rel = relogioDoRascunho(r);
-    if (!await perguntar(`Descartar o relatório da O.S. ${r.os || 'sem número'}? ` +
-                         'O que foi digitado e assinado será apagado.' +
-                         (rel ? ' Os horários marcados no relógio continuam na planilha.' : ''), 'Descartar')) return;
+    if (!await perguntar(tx('Descartar o relatório da O.S. {os}? O que foi digitado e assinado será apagado.', { os: r.os || tx('sem número') }) +
+                         (rel ? tx(' Os horários marcados no relógio continuam na planilha.') : ''), tx('Descartar'))) return;
     await tirarRascunho(r);
     if (rel && rel.estado === 'finalizado') await Relogio.arquivar(rel.id);
     renderAndamento();
@@ -472,14 +474,14 @@
       caixa.innerHTML = Servidor.pedeCodigo && !S.inicio.voce
         ? '<p class="vazio">Entre com o seu código de técnico para ver as O.S.</p>'
         : document.body.classList.contains('carregando')
-        ? '<p class="vazio">Carregando as O.S.…</p>'
-        : '<p class="vazio">Nenhuma O.S. na lista. Use o botão abaixo para digitar.</p>';
+        ? `<p class="vazio">${esc(tx('Carregando as O.S.…'))}</p>`
+        : `<p class="vazio">${esc(tx('Nenhuma O.S. na lista. Use o botão abaixo para digitar.'))}</p>`;
       return;
     }
     if (!achadas.length) {
       caixa.innerHTML = termo
-        ? '<p class="vazio">Nada encontrado com esse termo. Se a O.S. já foi encerrada, digite o número dela.</p>'
-        : '<p class="vazio">Nenhuma O.S. em aberto. Para um segundo atendimento, digite o número da O.S. na busca.</p>';
+        ? `<p class="vazio">${esc(tx('Nada encontrado com esse termo. Se a O.S. já foi encerrada, digite o número dela.'))}</p>`
+        : `<p class="vazio">${esc(tx('Nenhuma O.S. em aberto. Para um segundo atendimento, digite o número da O.S. na busca.'))}</p>`;
       return;
     }
 
@@ -489,9 +491,9 @@
     caixa.innerHTML = ordenadas.slice(0, MAX_NA_LISTA).map(o => {
       const extra = [o.modelo, o.serie ? 'S/N ' + o.serie : '', o.descricao].filter(Boolean).join(' · ');
       const rel = Relogio.daOs(o.os);
-      const selo = rel ? SELO_RELOGIO[rel.estado] || ''
-        : rascunhoDa(o.os) ? 'Em andamento neste celular · toque para continuar'
-        : o.feito ? 'Já encerrada · novo relatório sai como v2' : '';
+      const selo = esc(rel ? tx(SELO_RELOGIO[rel.estado] || '')
+        : rascunhoDa(o.os) ? tx('Em andamento neste celular · toque para continuar')
+        : o.feito ? tx('Já encerrada · novo relatório sai como v2') : '');
       return `<button type="button" class="ordem${o.feito ? ' ordem--feita' : ''}" data-i="${todas.indexOf(o)}">
         <span class="ordem__cab"><span class="ordem__os">${esc(o.os)}</span><span class="ordem__data">${esc(br(o.data))}</span></span>
         <span class="ordem__cliente">${esc(o.cliente || '—')}</span>
@@ -499,7 +501,7 @@
         ${selo ? `<span class="ordem__selo">${selo}</span>` : ''}
       </button>`;
     }).join('') + (ordenadas.length > MAX_NA_LISTA
-      ? `<p class="vazio">Mostrando ${MAX_NA_LISTA} de ${ordenadas.length}. Digite para filtrar.</p>` : '');
+      ? `<p class="vazio">${esc(tx('Mostrando {max} de {total}. Digite para filtrar.', { max: MAX_NA_LISTA, total: ordenadas.length }))}</p>` : '');
   }
 
   const rascunhoDa = os => (os ? S.rascunhos.find(r => r.os.trim() === os) : null);
@@ -520,12 +522,12 @@
     const rel = ordem.os ? Relogio.daOs(ordem.os) : null;
     if (rel) {
       if (rel.estado === 'pausada') {
-        if (await perguntar(`Retomar o serviço da O.S. ${ordem.os}?`, 'Retomar')) await acaoRelogio('retomar', rel.id);
+        if (await perguntar(tx('Retomar o serviço da O.S. {os}?', { os: ordem.os }), tx('Retomar'))) await acaoRelogio('retomar', rel.id);
       } else if (rel.estado === 'finalizado') {
         abrirRelatorioDo(rel.id);
       } else {
         window.scrollTo({ top: 0, behavior: 'smooth' });
-        toast('Esta O.S. já está em serviço.');
+        toast(tx('Esta O.S. já está em serviço.'));
       }
       return;
     }
@@ -533,8 +535,8 @@
     if (aberto) { abrirRascunho(aberto); return; }
     if (!exigirTecnico()) return;
     if (ordem.feito &&
-        !await perguntar(`A O.S. ${ordem.os} já foi encerrada. Começar um novo atendimento para ela? ` +
-                 'O relatório sai como v2, em branco, sem nada do atendimento anterior.', 'Começar')) return;
+        !await perguntar(tx('A O.S. {os} já foi encerrada. Começar um novo atendimento para ela? O relatório sai como v2, em branco, sem nada do atendimento anterior.',
+                            { os: ordem.os }), tx('Começar'))) return;
     await perguntarInicio(ordem);
   }
 
@@ -557,23 +559,25 @@
     const digitar = !ordem.os;
     const atual = Relogio.atual();
     const escolha = await abrirCaixa(`
-      <p class="modal__txt">${digitar ? '<b>Digitar a O.S.</b>'
-        : `<b>O.S. ${esc(ordem.os)}</b><br>${esc(ordem.cliente || '')}`}</p>
-      ${digitar ? `<div class="cp"><label for="cx-os">Número da O.S.</label>
+      <p class="modal__txt">${digitar ? `<b>${esc(tx('Digitar a O.S.'))}</b>`
+        : `<b>${esc(tx('O.S. {os}', { os: ordem.os }))}</b><br>${esc(ordem.cliente || '')}`}</p>
+      ${digitar ? `<div class="cp"><label for="cx-os">${esc(tx('Número da O.S.'))}</label>
         <input class="campo" id="cx-os" autocomplete="off"></div>` : ''}
-      <p class="modal__txt">Iniciar o serviço agora, às ${hhmm(Date.now())}?
-        ${atual ? `<br><span class="caixa__nota">A O.S. ${esc(atual.os)}, que está ${atual.estado === 'almoco' ? 'no almoço' : 'em serviço'}, vai ser pausada.</span>` : ''}</p>
+      <p class="modal__txt">${esc(tx('Iniciar o serviço agora, às {hora}?', { hora: hhmm(Date.now()) }))}
+        ${atual ? `<br><span class="caixa__nota">${esc(atual.estado === 'almoco'
+          ? tx('A O.S. {os}, que está no almoço, vai ser pausada.', { os: atual.os })
+          : tx('A O.S. {os}, que está em serviço, vai ser pausada.', { os: atual.os }))}</span>` : ''}</p>
       <p class="erro" hidden></p>
       <div class="modal__acoes">
-        <button type="button" class="btn btn--fantasma" data-fechar>Cancelar</button>
-        <button type="button" class="btn btn--fantasma" data-escolha="relatorio">Só o relatório</button>
-        <button type="button" class="btn btn--acento" data-escolha="iniciar">Iniciar serviço</button>
+        <button type="button" class="btn btn--fantasma" data-fechar>${esc(tx('Cancelar'))}</button>
+        <button type="button" class="btn btn--fantasma" data-escolha="relatorio">${esc(tx('Só o relatório'))}</button>
+        <button type="button" class="btn btn--acento" data-escolha="iniciar">${esc(tx('Iniciar serviço'))}</button>
       </div>`, corpo => {
       corpo.addEventListener('click', e => {
         const b = e.target.closest('[data-escolha]');
         if (!b) return;
         const os = digitar ? corpo.querySelector('#cx-os').value.trim() : ordem.os;
-        if (!os && b.dataset.escolha === 'iniciar') { erroCaixa('Digite o número da O.S.'); return; }
+        if (!os && b.dataset.escolha === 'iniciar') { erroCaixa(tx('Digite o número da O.S.')); return; }
         fecharCaixa({ acao: b.dataset.escolha, os });
       });
       if (digitar) setTimeout(() => corpo.querySelector('#cx-os').focus(), 50);
@@ -599,6 +603,12 @@
     servico: 'Em serviço agora', almoco: 'No almoço', pausada: 'Pausada · toque para retomar',
     finalizado: 'Serviço finalizado · toque para o relatório'
   };
+  const nomeDoEstado = e => tx(ESTADOS[e] || e);
+  // o motivo da pausa é gravado em português (o NewSimova lê); na tela sai no idioma
+  const rotuloMotivo = m => {
+    const x = /^Outra O\.S\. \((.*)\)$/.exec(m || '');
+    return x ? tx('Outra O.S. ({os})', { os: x[1] }) : tx(m || '');
+  };
   const correndo = rel => rel && (rel.estado === 'servico' || rel.estado === 'almoco');
 
   const hhmm = ms => { const d = new Date(ms); return `${pad(d.getHours())}:${pad(d.getMinutes())}`; };
@@ -622,31 +632,31 @@
       cartao.className = 'cartao relogio' + (a.esquecido ? ' relogio--esquecido' : a.estado === 'almoco' ? ' relogio--almoco' : '');
       cartao.innerHTML = `
         <div class="relogio__cab">
-          <span class="relogio__estado">${ESTADOS[a.estado]}</span>
-          <span class="relogio__total" aria-label="tempo em serviço">${duracao(a.minutos)}</span>
+          <span class="relogio__estado">${esc(nomeDoEstado(a.estado))}</span>
+          <span class="relogio__total" aria-label="${esc(tx('tempo em serviço'))}">${duracao(a.minutos)}</span>
         </div>
-        <div class="relogio__os">O.S. ${esc(a.os)}</div>
+        <div class="relogio__os">${esc(tx('O.S. {os}', { os: a.os }))}</div>
         <div class="relogio__cliente">${esc(a.cliente || '—')}</div>
-        <div class="relogio__desde">${a.estado === 'almoco' ? 'no almoço desde' : 'desde'} ${esc(quando(a.desde))}</div>
-        ${a.esquecido ? `<div class="erro relogio__alerta"><span>Correndo há ${duracao(Math.round((Date.now() - a.desde) / 60000))} direto. Esqueceu de pausar?</span>
-          <button type="button" class="btn btn--mini" data-rel="esquecido" data-id="${id}">Corrigir</button></div>` : ''}
+        <div class="relogio__desde">${esc(a.estado === 'almoco' ? tx('no almoço desde') : tx('desde'))} ${esc(quando(a.desde))}</div>
+        ${a.esquecido ? `<div class="erro relogio__alerta"><span>${esc(tx('Correndo há {t} direto. Esqueceu de pausar?', { t: duracao(Math.round((Date.now() - a.desde) / 60000)) }))}</span>
+          <button type="button" class="btn btn--mini" data-rel="esquecido" data-id="${id}">${esc(tx('Corrigir'))}</button></div>` : ''}
         <div class="relogio__btns">
           ${a.estado === 'almoco'
-            ? `<button type="button" class="btn btn--primario" data-rel="volta" data-id="${id}">Voltar do almoço</button>`
-            : `<button type="button" class="btn btn--fantasma" data-rel="almoco" data-id="${id}">Almoço</button>`}
-          <button type="button" class="btn btn--fantasma" data-rel="pausar" data-id="${id}">Pausar</button>
+            ? `<button type="button" class="btn btn--primario" data-rel="volta" data-id="${id}">${esc(tx('Voltar do almoço'))}</button>`
+            : `<button type="button" class="btn btn--fantasma" data-rel="almoco" data-id="${id}">${esc(tx('Almoço'))}</button>`}
+          <button type="button" class="btn btn--fantasma" data-rel="pausar" data-id="${id}">${esc(tx('Pausar'))}</button>
         </div>
-        <button type="button" class="btn btn--acento btn--largo" data-rel="finalizar" data-id="${id}">Finalizar serviço</button>
+        <button type="button" class="btn btn--acento btn--largo" data-rel="finalizar" data-id="${id}">${esc(tx('Finalizar serviço'))}</button>
         <div class="relogio__links">
-          <button type="button" class="ligacao" data-rel="relatorio" data-id="${id}">Preencher relatório ›</button>
-          <button type="button" class="ligacao" data-rel="ajustar" data-id="${id}">Ajustar horários ›</button>
+          <button type="button" class="ligacao" data-rel="relatorio" data-id="${id}">${esc(tx('Preencher relatório ›'))}</button>
+          <button type="button" class="ligacao" data-rel="ajustar" data-id="${id}">${esc(tx('Ajustar horários ›'))}</button>
         </div>
         ${Relogio.tambemAtivos().map(o => `<div class="relogio__outro">
-          <span>Também em serviço (começou em outro aparelho): <b>O.S. ${esc(o.os)}</b>, desde ${esc(quando(o.desde))}</span>
+          <span>${tx('Também em serviço (começou em outro aparelho): <b>O.S. {os}</b>, desde {quando}', { os: esc(o.os), quando: esc(quando(o.desde)) })}</span>
           <span class="pausada__btns">
-            <button type="button" class="btn btn--mini" data-rel="pausar" data-id="${esc(o.id)}">Pausar</button>
-            <button type="button" class="btn btn--mini" data-rel="finalizar" data-id="${esc(o.id)}">Finalizar</button>
-            <button type="button" class="btn btn--mini" data-rel="ajustar" data-id="${esc(o.id)}">Horários</button>
+            <button type="button" class="btn btn--mini" data-rel="pausar" data-id="${esc(o.id)}">${esc(tx('Pausar'))}</button>
+            <button type="button" class="btn btn--mini" data-rel="finalizar" data-id="${esc(o.id)}">${esc(tx('Finalizar'))}</button>
+            <button type="button" class="btn btn--mini" data-rel="ajustar" data-id="${esc(o.id)}">${esc(tx('Horários'))}</button>
           </span></div>`).join('')}`;
     }
 
@@ -655,14 +665,14 @@
     $('#lista-pausadas').innerHTML = pausadas.map(p => {
       const id = esc(p.id);
       return `<div class="ordem ordem--pausada">
-        <span class="ordem__cab"><span class="ordem__os">${esc(p.os)}</span><span class="ordem__data">desde ${esc(quando(p.desde))}</span></span>
+        <span class="ordem__cab"><span class="ordem__os">${esc(p.os)}</span><span class="ordem__data">${esc(tx('desde'))} ${esc(quando(p.desde))}</span></span>
         <span class="ordem__cliente">${esc(p.cliente || '—')}</span>
-        <span class="ordem__extra">${esc(p.motivo || 'Pausada')} · ${duracao(p.minutos)} em serviço</span>
+        <span class="ordem__extra">${esc(p.motivo ? rotuloMotivo(p.motivo) : tx('Pausada'))} · ${esc(tx('{t} em serviço', { t: duracao(p.minutos) }))}</span>
         <span class="pausada__btns">
-          <button type="button" class="btn btn--mini btn--forte" data-rel="retomar" data-id="${id}">Retomar</button>
-          <button type="button" class="btn btn--mini" data-rel="finalizar" data-id="${id}">Finalizar</button>
-          <button type="button" class="btn btn--mini" data-rel="relatorio" data-id="${id}">Relatório</button>
-          <button type="button" class="btn btn--mini" data-rel="ajustar" data-id="${id}">Horários</button>
+          <button type="button" class="btn btn--mini btn--forte" data-rel="retomar" data-id="${id}">${esc(tx('Retomar'))}</button>
+          <button type="button" class="btn btn--mini" data-rel="finalizar" data-id="${id}">${esc(tx('Finalizar'))}</button>
+          <button type="button" class="btn btn--mini" data-rel="relatorio" data-id="${id}">${esc(tx('Relatório'))}</button>
+          <button type="button" class="btn btn--mini" data-rel="ajustar" data-id="${id}">${esc(tx('Horários'))}</button>
         </span>
       </div>`;
     }).join('');
@@ -675,7 +685,7 @@
     const el = $('#toques-fila');
     el.hidden = !n;
     el.textContent = !n ? '' : plural(n, 'registro de horário esperando', 'registros de horário esperando') +
-      ' para subir para a planilha.' + (navigator.onLine === false ? ' Sem sinal: sobem quando a conexão voltar.' : '');
+      tx(' para subir para a planilha.') + (navigator.onLine === false ? tx(' Sem sinal: sobem quando a conexão voltar.') : '');
   }
 
   // Faixa fina no relatório: o estado do relógio desta O.S.
@@ -685,8 +695,8 @@
     $$('.faixa-relogio').forEach(el => {
       el.classList.toggle('faixa-relogio--sem', !rel);
       el.textContent = !r ? ''
-        : !rel ? 'Sem horário marcado: na hora de enviar, informe o início e o fim do serviço.'
-        : `${ESTADOS[rel.estado]}${correndo(rel) ? ' desde ' + quando(rel.desde) : ''} · ${duracao(rel.minutos)} em serviço`;
+        : !rel ? tx('Sem horário marcado: na hora de enviar, informe o início e o fim do serviço.')
+        : `${nomeDoEstado(rel.estado)}${correndo(rel) ? ' ' + tx('desde') + ' ' + quando(rel.desde) : ''} · ${tx('{t} em serviço', { t: duracao(rel.minutos) })}`;
     });
   }
 
@@ -698,16 +708,16 @@
     try {
       if (acao === 'iniciar') {
         const res = await Relogio.iniciar(dados, (tecnicoAtual() || {}).nome);
-        toast(res.pausou ? `Serviço iniciado. A O.S. ${res.pausou} foi pausada.`
-                         : `Serviço da O.S. ${dados.os} iniciado às ${hhmm(Date.now())}.`);
+        toast(res.pausou ? tx('Serviço iniciado. A O.S. {os} foi pausada.', { os: res.pausou })
+                         : tx('Serviço da O.S. {os} iniciado às {hora}.', { os: dados.os, hora: hhmm(Date.now()) }));
         window.scrollTo({ top: 0, behavior: 'smooth' });
       }
-      if (acao === 'almoco')    { await Relogio.almoco(id); toast('Bom almoço. Na volta, toque em "Voltar do almoço".'); }
+      if (acao === 'almoco')    { await Relogio.almoco(id); toast(tx('Bom almoço. Na volta, toque em "Voltar do almoço".')); }
       if (acao === 'volta')     await Relogio.voltar(id);
       if (acao === 'pausar')    await pausarRelogio(id);
       if (acao === 'retomar') {
         const res = await Relogio.retomar(id);
-        toast(res.pausou ? `Retomado. A O.S. ${res.pausou} foi pausada.` : 'Serviço retomado.');
+        toast(res.pausou ? tx('Retomado. A O.S. {os} foi pausada.', { os: res.pausou }) : tx('Serviço retomado.'));
         window.scrollTo({ top: 0, behavior: 'smooth' });
       }
       if (acao === 'finalizar') await finalizarServico(id);
@@ -725,23 +735,23 @@
   async function pausarRelogio(id) {
     const rel = Relogio.resumo(id);
     const motivo = await abrirCaixa(`
-      <p class="modal__txt"><b>Pausar a O.S. ${esc(rel.os)}</b><br>Por quê?</p>
+      <p class="modal__txt"><b>${esc(tx('Pausar a O.S. {os}', { os: rel.os }))}</b><br>${esc(tx('Por quê?'))}</p>
       <div class="opcoes">
-        ${MOTIVOS_PAUSA.map((m, i) => `<label class="marcar opcao"><input type="radio" name="motivo" value="${esc(m)}"${i ? '' : ' checked'}> ${esc(m)}</label>`).join('')}
-        <label class="marcar opcao"><input type="radio" name="motivo" value=""> Outro</label>
-        <input class="campo" id="cx-outro" placeholder="Qual?" maxlength="120" autocomplete="off" hidden>
+        ${MOTIVOS_PAUSA.map((m, i) => `<label class="marcar opcao"><input type="radio" name="motivo" value="${esc(m)}"${i ? '' : ' checked'}> ${esc(tx(m))}</label>`).join('')}
+        <label class="marcar opcao"><input type="radio" name="motivo" value=""> ${esc(tx('Outro'))}</label>
+        <input class="campo" id="cx-outro" placeholder="${esc(tx('Qual?'))}" maxlength="120" autocomplete="off" hidden>
       </div>
       <p class="erro" hidden></p>
       <div class="modal__acoes">
-        <button type="button" class="btn btn--fantasma" data-fechar>Cancelar</button>
-        <button type="button" class="btn btn--primario" id="cx-ok">Pausar</button>
+        <button type="button" class="btn btn--fantasma" data-fechar>${esc(tx('Cancelar'))}</button>
+        <button type="button" class="btn btn--primario" id="cx-ok">${esc(tx('Pausar'))}</button>
       </div>`, corpo => {
       const outro = corpo.querySelector('#cx-outro');
       const marcado = () => corpo.querySelector('[name=motivo]:checked').value;
       corpo.addEventListener('change', () => { outro.hidden = !!marcado(); if (!outro.hidden) outro.focus(); });
       corpo.querySelector('#cx-ok').addEventListener('click', () => {
         const v = marcado() || outro.value.trim();
-        if (!v) { erroCaixa('Escreva o motivo.'); return; }
+        if (!v) { erroCaixa(tx('Escreva o motivo.')); return; }
         fecharCaixa(v);
       });
     });
@@ -750,8 +760,8 @@
 
   async function finalizarServico(id) {
     const rel = Relogio.resumo(id);
-    if (!await perguntar(`Finalizar o serviço da O.S. ${rel.os} agora, às ${hhmm(Date.now())}? ` +
-                         'Depois vem o relatório.', 'Finalizar serviço')) return;
+    if (!await perguntar(tx('Finalizar o serviço da O.S. {os} agora, às {hora}? Depois vem o relatório.',
+                            { os: rel.os, hora: hhmm(Date.now()) }), tx('Finalizar serviço'))) return;
     await Relogio.finalizar(id);
     abrirRelatorioDo(id);
   }
@@ -778,20 +788,20 @@
     const tipos = o.tipos || [];
     return abrirCaixa(`
       <p class="modal__txt"><b>${esc(o.titulo)}</b>${o.texto ? '<br>' + esc(o.texto) : ''}</p>
-      ${tipos.length ? `<div class="cp"><label for="cx-tipo">O que foi</label>
-        <select class="campo" id="cx-tipo">${tipos.map(t => `<option value="${t}">${esc(Relogio.NOMES[t])}</option>`).join('')}</select></div>
-        <div class="cp" id="cx-motivo-cp" hidden><label for="cx-motivo">Motivo da pausa</label>
-        <select class="campo" id="cx-motivo">${MOTIVOS_PAUSA.concat('Outro').map(m => `<option>${esc(m)}</option>`).join('')}</select></div>` : ''}
+      ${tipos.length ? `<div class="cp"><label for="cx-tipo">${esc(tx('O que foi'))}</label>
+        <select class="campo" id="cx-tipo">${tipos.map(t => `<option value="${t}">${esc(Relogio.nome(t))}</option>`).join('')}</select></div>
+        <div class="cp" id="cx-motivo-cp" hidden><label for="cx-motivo">${esc(tx('Motivo da pausa'))}</label>
+        <select class="campo" id="cx-motivo">${MOTIVOS_PAUSA.concat('Outro').map(m => `<option value="${esc(m)}">${esc(tx(m))}</option>`).join('')}</select></div>` : ''}
       ${(o.escolhas || []).length ? `<div class="opcoes">${o.escolhas.map((e, i) =>
         `<label class="marcar opcao"><input type="radio" name="cx-escolha" value="${e.valor}"${i ? '' : ' checked'}> ${esc(e.rotulo)}</label>`).join('')}</div>` : ''}
       ${o.horas.map((h, i) => `<div class="cp"><label for="cx-hora${i}">${esc(h.rotulo)}</label>
         <input class="campo" id="cx-hora${i}" type="datetime-local" value="${paraCampo(h.hora)}"></div>`).join('')}
-      <div class="cp"><label for="cx-just">Justificativa</label>
-        <textarea class="campo" id="cx-just" rows="2" maxlength="300" placeholder="Ex.: esqueci de marcar na hora"></textarea></div>
+      <div class="cp"><label for="cx-just">${esc(tx('Justificativa'))}</label>
+        <textarea class="campo" id="cx-just" rows="2" maxlength="300" placeholder="${esc(tx('Ex.: esqueci de marcar na hora'))}"></textarea></div>
       <p class="erro" hidden></p>
       <div class="modal__acoes">
-        <button type="button" class="btn btn--fantasma" data-fechar>${esc(o.textoNao || 'Voltar')}</button>
-        <button type="button" class="btn btn--primario" id="cx-ok">${esc(o.textoOk || 'Salvar')}</button>
+        <button type="button" class="btn btn--fantasma" data-fechar>${esc(tx(o.textoNao || 'Voltar'))}</button>
+        <button type="button" class="btn btn--primario" id="cx-ok">${esc(tx(o.textoOk || 'Salvar'))}</button>
       </div>`, corpo => {
       const q = sel => corpo.querySelector(sel);
       if (tipos.length) q('#cx-tipo').addEventListener('change', () => { q('#cx-motivo-cp').hidden = q('#cx-tipo').value !== 'pausa'; });
@@ -799,7 +809,7 @@
       q('#cx-ok').addEventListener('click', async () => {
         if (salvando) return;
         const horas = o.horas.map((h, i) => doCampo(q('#cx-hora' + i).value));
-        if (horas.some(h => !h)) { erroCaixa('Preencha a data e a hora.'); return; }
+        if (horas.some(h => !h)) { erroCaixa(tx('Preencha a data e a hora.')); return; }
         const escolha = q('[name=cx-escolha]:checked');
         salvando = true;
         try {
@@ -827,18 +837,18 @@
       const rel = Relogio.resumo(id);
       if (!rel) return;
       const escolha = await abrirCaixa(`
-        <p class="modal__txt"><b>Horários da O.S. ${esc(rel.os)}</b><br>
-          <span class="caixa__nota">${duracao(rel.minutos)} em serviço · ${esc(ESTADOS[rel.estado].toLowerCase())}</span></p>
+        <p class="modal__txt"><b>${esc(tx('Horários da O.S. {os}', { os: rel.os }))}</b><br>
+          <span class="caixa__nota">${esc(tx('{t} em serviço', { t: duracao(rel.minutos) }))} · ${esc(nomeDoEstado(rel.estado).toLowerCase())}</span></p>
         <ul class="toques">${rel.toques.map(t => `<li class="toque">
             <span class="toque__hora">${esc(quando(t.hora))}</span>
-            <span class="toque__tipo">${esc(Relogio.NOMES[t.tipo])}${t.motivo ? ' · ' + esc(t.motivo) : ''}
-              ${t.corrigido || t.justificativa ? '<span class="toque__marca">corrigido</span>' : ''}</span>
-            <button type="button" class="btn btn--mini" data-escolha="corrigir:${esc(t.id)}">Corrigir</button>
+            <span class="toque__tipo">${esc(Relogio.nome(t.tipo))}${t.motivo ? ' · ' + esc(rotuloMotivo(t.motivo)) : ''}
+              ${t.corrigido || t.justificativa ? `<span class="toque__marca">${esc(tx('corrigido'))}</span>` : ''}</span>
+            <button type="button" class="btn btn--mini" data-escolha="corrigir:${esc(t.id)}">${esc(tx('Corrigir'))}</button>
           </li>`).join('')}</ul>
-        <button type="button" class="btn btn--fantasma btn--largo" data-escolha="incluir">+ Incluir um registro esquecido</button>
+        <button type="button" class="btn btn--fantasma btn--largo" data-escolha="incluir">${esc(tx('+ Incluir um registro esquecido'))}</button>
         <div class="modal__acoes caixa__rodape">
-          <button type="button" class="ligacao" data-escolha="cancelar">Iniciei por engano: cancelar</button>
-          <button type="button" class="btn btn--primario" data-fechar>Fechar</button>
+          <button type="button" class="ligacao" data-escolha="cancelar">${esc(tx('Iniciei por engano: cancelar'))}</button>
+          <button type="button" class="btn btn--primario" data-fechar>${esc(tx('Fechar'))}</button>
         </div>`, corpo => corpo.addEventListener('click', e => {
           const b = e.target.closest('[data-escolha]');
           if (b) fecharCaixa(b.dataset.escolha);
@@ -846,25 +856,25 @@
       if (!escolha) return;
 
       if (escolha === 'cancelar') {
-        if (await perguntar(`Cancelar o relógio da O.S. ${rel.os}? Ele sai deste celular; na planilha os ` +
-                            'horários ficam, marcados como cancelados.', 'Cancelar o relógio')) {
+        if (await perguntar(tx('Cancelar o relógio da O.S. {os}? Ele sai deste celular; na planilha os horários ficam, marcados como cancelados.',
+                               { os: rel.os }), tx('Cancelar o relógio'))) {
           await Relogio.cancelar(id);
-          toast(`Relógio da O.S. ${rel.os} cancelado.`);
+          toast(tx('Relógio da O.S. {os} cancelado.', { os: rel.os }));
           return;
         }
       } else if (escolha === 'incluir') {
         await formHora({
-          titulo: `Incluir um registro na O.S. ${rel.os}`,
+          titulo: tx('Incluir um registro na O.S. {os}', { os: rel.os }),
           tipos: ['almoco', 'volta', 'pausa', 'retomada', 'fim'],
-          horas: [{ rotulo: 'Quando', hora: Date.now() }],
+          horas: [{ rotulo: tx('Quando'), hora: Date.now() }],
           salvar: d => Relogio.incluir(id, d.tipo, d.horas[0], d.just, d.motivo)
         });
       } else {
         const t = rel.toques.find(x => 'corrigir:' + x.id === escolha);
         if (t) await formHora({
-          titulo: `Corrigir: ${Relogio.NOMES[t.tipo]} da O.S. ${rel.os}`,
-          texto: `Está marcado ${quando(t.hora)}. Qual é a hora certa?`,
-          horas: [{ rotulo: 'Hora certa', hora: t.hora }],
+          titulo: tx('Corrigir: {nome} da O.S. {os}', { nome: Relogio.nome(t.tipo), os: rel.os }),
+          texto: tx('Está marcado {quando}. Qual é a hora certa?', { quando: quando(t.hora) }),
+          horas: [{ rotulo: tx('Hora certa'), hora: t.hora }],
           salvar: d => Relogio.ajustar(id, t.id, d.horas[0], d.just)
         });
       }
@@ -875,11 +885,11 @@
   function corrigirEsquecido(rel) {
     if (!rel) return null;
     return formHora({
-      titulo: `O.S. ${rel.os}: o relógio está correndo desde ${quando(rel.desde)}`,
-      texto: 'Que horas você parou?',
-      escolhas: [{ valor: 'pausa', rotulo: 'Pausei: volto a esta O.S. depois' },
-                 { valor: 'fim', rotulo: 'Terminei o serviço' }],
-      horas: [{ rotulo: 'Parei em', hora: rel.desde }],
+      titulo: tx('O.S. {os}: o relógio está correndo desde {quando}', { os: rel.os, quando: quando(rel.desde) }),
+      texto: tx('Que horas você parou?'),
+      escolhas: [{ valor: 'pausa', rotulo: tx('Pausei: volto a esta O.S. depois') },
+                 { valor: 'fim', rotulo: tx('Terminei o serviço') }],
+      horas: [{ rotulo: tx('Parei em'), hora: rel.desde }],
       textoNao: 'Depois',
       salvar: d => (d.escolha === 'fim'
         ? Relogio.incluir(rel.id, 'fim', d.horas[0], d.just)
@@ -914,8 +924,8 @@
      Rascunho antigo, O.S. digitada à mão e máquina acrescentada ficam livres. */
   const NOME_CAMPO = { cliente: 'Cliente', servico: 'Serviço solicitado', modelo: 'Modelo', serie: 'Série' };
   const lapis = (k, i) => `<button type="button" class="lapis" data-corrigir="${k}"${i == null ? '' : ` data-maq="${i}"`} ` +
-    `aria-label="Corrigir ${NOME_CAMPO[k].toLowerCase()}">✎</button>`;
-  const marcaCorrigido = c => (c ? '<span class="corrigido">corrigido</span>' : '');
+    `aria-label="${esc(tx('Corrigir {campo}', { campo: tx(NOME_CAMPO[k]).toLowerCase() }))}">✎</button>`;
+  const marcaCorrigido = c => (c ? `<span class="corrigido">${esc(tx('corrigido'))}</span>` : '');
   const travadoMaq = (m, k) => !!(m.orig && m.orig[k]);
 
   function aplicarTravas() {
@@ -934,27 +944,27 @@
     if (!alvo) return;
     const origem = i == null ? S.r.origem[k] : alvo.orig[k];
     const atual = alvo[k];
-    const nome = NOME_CAMPO[k] + (i == null ? '' : ` (máquina ${i + 1})`);
+    const nome = tx(NOME_CAMPO[k]) + (i == null ? '' : tx(' (máquina {n})', { n: i + 1 }));
     const entrada = k === 'servico'
       ? `<textarea class="campo" id="cx-novo" rows="3" maxlength="2000">${esc(atual)}</textarea>`
       : `<input class="campo" id="cx-novo" value="${esc(atual)}" maxlength="120" autocomplete="off">`;
     const res = await abrirCaixa(`
-      <p class="modal__txt"><b>Corrigir: ${esc(nome)}</b><br>
-        <span class="caixa__nota">O motivo fica só no sistema da Kalmar. O cliente não vê.</span></p>
-      <div class="cp"><label>Está assim na O.S.</label><div class="texto">${esc(origem)}</div></div>
-      <div class="cp"><label for="cx-novo">Valor correto</label>${entrada}</div>
-      <div class="cp"><label for="cx-motivo">Por que está errado?</label>
-        <textarea class="campo" id="cx-motivo" rows="2" maxlength="300" placeholder="Ex.: a plaqueta da máquina tem outro número"></textarea></div>
+      <p class="modal__txt"><b>${esc(tx('Corrigir: {nome}', { nome }))}</b><br>
+        <span class="caixa__nota">${esc(tx('O motivo fica só no sistema da Kalmar. O cliente não vê.'))}</span></p>
+      <div class="cp"><label>${esc(tx('Está assim na O.S.'))}</label><div class="texto">${esc(origem)}</div></div>
+      <div class="cp"><label for="cx-novo">${esc(tx('Valor correto'))}</label>${entrada}</div>
+      <div class="cp"><label for="cx-motivo">${esc(tx('Por que está errado?'))}</label>
+        <textarea class="campo" id="cx-motivo" rows="2" maxlength="300" placeholder="${esc(tx('Ex.: a plaqueta da máquina tem outro número'))}"></textarea></div>
       <p class="erro" hidden></p>
       <div class="modal__acoes">
-        <button type="button" class="btn btn--fantasma" data-fechar>Cancelar</button>
-        <button type="button" class="btn btn--primario" id="cx-ok">Salvar correção</button>
+        <button type="button" class="btn btn--fantasma" data-fechar>${esc(tx('Cancelar'))}</button>
+        <button type="button" class="btn btn--primario" id="cx-ok">${esc(tx('Salvar correção'))}</button>
       </div>`, corpo => {
       corpo.querySelector('#cx-ok').addEventListener('click', () => {
         const novo = corpo.querySelector('#cx-novo').value.trim();
         const motivo = corpo.querySelector('#cx-motivo').value.trim();
-        if (!novo) { erroCaixa('Escreva o valor correto.'); return; }
-        if (novo !== origem && motivo.length < 5) { erroCaixa('Explique por que está errado (pelo menos 5 letras).'); return; }
+        if (!novo) { erroCaixa(tx('Escreva o valor correto.')); return; }
+        if (novo !== origem && motivo.length < 5) { erroCaixa(tx('Explique por que está errado (pelo menos 5 letras).')); return; }
         fecharCaixa({ novo, motivo });
       });
       setTimeout(() => corpo.querySelector('#cx-novo').focus(), 50);
@@ -966,7 +976,7 @@
     alvo[k] = res.novo;
     salvar();
     preencherCampos();
-    toast('Corrigido. O motivo vai só para o sistema.');
+    toast(tx('Corrigido. O motivo vai só para o sistema.'));
   }
 
   // As correções de verdade (valor final ≠ o da O.S.), para o servidor gravar na planilha.
@@ -986,31 +996,31 @@
     $('#maquinas').innerHTML = lista.map((m, i) => `
       <div class="cartao maq" data-maq="${i}">
         <div class="maq__cab">
-          <span class="maq__titulo">Máquina ${i + 1}</span>
-          ${lista.length > 1 ? `<button type="button" class="btn btn--mini" data-remover="${i}">Remover</button>` : ''}
+          <span class="maq__titulo">${esc(tx('Máquina {n}', { n: i + 1 }))}</span>
+          ${lista.length > 1 ? `<button type="button" class="btn btn--mini" data-remover="${i}">${esc(tx('Remover'))}</button>` : ''}
         </div>
         <div class="cp">
-          <label for="m${i}-modelo">Modelo${travadoMaq(m, 'modelo') ? ' ' + lapis('modelo', i) + marcaCorrigido(m.corr && m.corr.modelo) : ''}</label>
+          <label for="m${i}-modelo">${esc(tx('Modelo'))}${travadoMaq(m, 'modelo') ? ' ' + lapis('modelo', i) + marcaCorrigido(m.corr && m.corr.modelo) : ''}</label>
           <input class="campo${travadoMaq(m, 'modelo') ? ' trava' : ''}" id="m${i}-modelo" data-k="modelo" value="${esc(m.modelo)}" autocomplete="off"${travadoMaq(m, 'modelo') ? ' readonly' : ''} placeholder="Ex.: Kalmar K2Ti Port">
         </div>
         <div class="grade-3">
           <div class="cp">
-            <label for="m${i}-frota">Frota</label>
+            <label for="m${i}-frota">${esc(tx('Frota'))}</label>
             <input class="campo" id="m${i}-frota" data-k="frota" value="${esc(m.frota)}" autocomplete="off">
           </div>
           <div class="cp">
-            <label for="m${i}-serie">Série${travadoMaq(m, 'serie') ? ' ' + lapis('serie', i) + marcaCorrigido(m.corr && m.corr.serie) : ''}</label>
+            <label for="m${i}-serie">${esc(tx('Série'))}${travadoMaq(m, 'serie') ? ' ' + lapis('serie', i) + marcaCorrigido(m.corr && m.corr.serie) : ''}</label>
             <input class="campo${travadoMaq(m, 'serie') ? ' trava' : ''}" id="m${i}-serie" data-k="serie" value="${esc(m.serie)}" autocomplete="off"${travadoMaq(m, 'serie') ? ' readonly' : ''}>
           </div>
           <div class="cp">
-            <label for="m${i}-horimetro">Horímetro</label>
+            <label for="m${i}-horimetro">${esc(tx('Horímetro'))}</label>
             <input class="campo" id="m${i}-horimetro" data-k="horimetro" value="${esc(m.horimetro)}" inputmode="decimal" autocomplete="off">
           </div>
         </div>
         <div class="cp">
-          <label for="m${i}-descricao">O que foi feito nesta máquina <span class="opcional">opcional</span></label>
+          <label for="m${i}-descricao">${esc(tx('O que foi feito nesta máquina'))} <span class="opcional">${esc(tx('opcional'))}</span></label>
           <textarea class="campo" id="m${i}-descricao" data-k="descricao" rows="4"
-            placeholder="Defeito encontrado, o que foi verificado e o que foi feito. Sem nada de especial, deixe em branco — vale a descrição do serviço lá em cima.">${esc(m.descricao)}</textarea>
+            placeholder="${esc(tx('Defeito encontrado, o que foi verificado e o que foi feito. Sem nada de especial, deixe em branco — vale a descrição do serviço lá em cima.'))}">${esc(m.descricao)}</textarea>
         </div>
       </div>`).join('');
   }
@@ -1021,23 +1031,22 @@
     const faltas = [];
     const marcar = (el, msg) => { el.classList.add('falta'); faltas.push({ el, msg }); };
 
-    if (!S.r.os.trim())      marcar($('#f-os'), 'Falta a O.S.');
-    if (!S.r.data)           marcar($('#f-data'), 'Falta a data do atendimento.');
+    if (!S.r.os.trim())      marcar($('#f-os'), tx('Falta a O.S.'));
+    if (!S.r.data)           marcar($('#f-data'), tx('Falta a data do atendimento.'));
     if (S.r.dataFim && S.r.data && S.r.dataFim < S.r.data) {
-      marcar($('#f-data-fim'), 'A data final é anterior à do atendimento.');
+      marcar($('#f-data-fim'), tx('A data final é anterior à do atendimento.'));
     }
-    if (!S.r.cliente.trim()) marcar($('#f-cliente'), 'Falta o cliente.');
+    if (!S.r.cliente.trim()) marcar($('#f-cliente'), tx('Falta o cliente.'));
     S.r.maquinas.forEach((m, i) => {
-      const n = `Máquina ${i + 1}: `;
-      if (!m.serie.trim() && !m.frota.trim()) marcar($(`#m${i}-frota`), n + 'informe a frota ou a série.');
-      if (!m.horimetro.trim()) marcar($(`#m${i}-horimetro`), n + 'falta o horímetro.');
+      if (!m.serie.trim() && !m.frota.trim()) marcar($(`#m${i}-frota`), tx('Máquina {n}: informe a frota ou a série.', { n: i + 1 }));
+      if (!m.horimetro.trim()) marcar($(`#m${i}-horimetro`), tx('Máquina {n}: falta o horímetro.', { n: i + 1 }));
     });
 
     /* O que foi feito é obrigatório UMA vez, não uma por máquina: ou a
        descrição geral do serviço, ou o texto de alguma máquina. Sem
        isso o relatório sairia dizendo só que alguém esteve lá. */
     if (!(S.r.descricaoGeral || '').trim() && !S.r.maquinas.some(m => m.descricao.trim())) {
-      marcar($('#f-descricao'), 'Escreva a descrição do serviço, ou o que foi feito em pelo menos uma máquina.');
+      marcar($('#f-descricao'), tx('Escreva a descrição do serviço, ou o que foi feito em pelo menos uma máquina.'));
     }
     return faltas;
   }
@@ -1047,20 +1056,20 @@
     const r = S.r, t = tecnicoAtual() || {};
     $('#leitura').innerHTML = `
       <dl>
-        <dt>O.S.</dt><dd>${esc(r.os)}</dd>
-        <dt>Cliente</dt><dd>${esc(r.cliente)}</dd>
-        <dt>Data</dt><dd>${esc(periodo(r.data, r.dataFim))}</dd>
-        <dt>Técnico</dt><dd>${esc(t.nome || '—')}${t.cargo ? ` · ${esc(t.cargo)}` : ''}</dd>
+        <dt>${esc(tx('O.S.'))}</dt><dd>${esc(r.os)}</dd>
+        <dt>${esc(tx('Cliente'))}</dt><dd>${esc(r.cliente)}</dd>
+        <dt>${esc(tx('Data'))}</dt><dd>${esc(periodo(r.data, r.dataFim))}</dd>
+        <dt>${esc(tx('Técnico'))}</dt><dd>${esc(t.nome || '—')}${t.cargo ? ` · ${esc(t.cargo)}` : ''}</dd>
       </dl>
-      ${r.servico.trim() ? `<div class="leitura__servico"><span class="leitura__rotulo">Serviço solicitado</span>
+      ${r.servico.trim() ? `<div class="leitura__servico"><span class="leitura__rotulo">${esc(tx('Serviço solicitado'))}</span>
         <div class="texto">${esc(r.servico.trim())}</div></div>` : ''}
-      ${(r.descricaoGeral || '').trim() ? `<div class="leitura__servico"><span class="leitura__rotulo">Descrição do serviço</span>
+      ${(r.descricaoGeral || '').trim() ? `<div class="leitura__servico"><span class="leitura__rotulo">${esc(tx('Descrição do serviço'))}</span>
         <div class="texto">${esc(r.descricaoGeral.trim())}</div></div>` : ''}
       ${r.maquinas.map((m, i) => {
-        const ident = [m.frota && 'Frota ' + m.frota, m.serie && 'S/N ' + m.serie, m.horimetro && 'Horímetro ' + horimetro(m.horimetro)]
+        const ident = [m.frota && tx('Frota') + ' ' + m.frota, m.serie && 'S/N ' + m.serie, m.horimetro && tx('Horímetro') + ' ' + horimetro(m.horimetro)]
           .filter(Boolean).join(' · ');
         return `<div class="leitura__maq">
-          <div class="leitura__maq-titulo">${i + 1}. ${esc(m.modelo || 'Equipamento')}</div>
+          <div class="leitura__maq-titulo">${i + 1}. ${esc(m.modelo || tx('Equipamento'))}</div>
           <div class="leitura__maq-ident">${esc(ident)}</div>
           ${m.descricao.trim() ? `<div class="leitura__maq-desc">${esc(m.descricao.trim())}</div>` : ''}
         </div>`;
@@ -1212,7 +1221,7 @@
   function estadoDobraTec() {
     const el = $('#dobra-tecnico-estado');
     const ok = !padTec.vazia();
-    el.textContent = ok ? 'assinada ✓' : 'falta assinar';
+    el.textContent = ok ? tx('assinada ✓') : tx('falta assinar');
     el.className = 'dobra__estado ' + (ok ? 'dobra__estado--ok' : 'dobra__estado--falta');
   }
 
@@ -1264,7 +1273,7 @@
     palco.classList.toggle('paisagem__palco--girado', girar);
     palco.style.width  = (girar ? tela.height : tela.width) + 'px';
     palco.style.height = (girar ? tela.width : tela.height) + 'px';
-    $('#paisagem-titulo').textContent = paisagem.titulo + (girar ? ' · vire o celular para a esquerda' : '');
+    $('#paisagem-titulo').textContent = paisagem.titulo + (girar ? tx(' · vire o celular para a esquerda') : '');
 
     // a caixa ocupa o que sobrou, sempre em 5:2 — proporção diferente
     // da de lá de baixo deixaria a assinatura achatada
@@ -1300,7 +1309,7 @@
   function prepararPaisagem() {
     $$('[data-deitar]').forEach(b => b.addEventListener('click', () => {
       const tec = b.dataset.deitar === 'tecnico';
-      abrirPaisagem(tec ? padTec : padCli, tec ? 'Assinatura do técnico' : 'Assinatura do responsável');
+      abrirPaisagem(tec ? padTec : padCli, tec ? tx('Assinatura do técnico') : tx('Assinatura do responsável'));
     }));
     $('#paisagem-pronto').addEventListener('click', fecharPaisagem);
     $('#paisagem-limpar').addEventListener('click', () => paisagem && paisagem.pad.limpar());
@@ -1349,14 +1358,14 @@
     $('#linha-contato-email').hidden = !ce;
     if (ce) {
       $('#chk-contato-email').checked = !!S.r.enviarContato;
-      $('#txt-contato-email').textContent = 'Também enviar para ' + ce + ' (contato da O.S.)';
+      $('#txt-contato-email').textContent = tx('Também enviar para {email} (contato da O.S.)', { email: ce });
     }
   }
   function campoEmailExtra(v) {
     return `<div class="email-extra">
       <input class="campo campo-email" type="email" value="${esc(v || '')}" inputmode="email" autocomplete="off"
-             autocapitalize="off" spellcheck="false" aria-label="Outro e-mail para receber o PDF">
-      <button type="button" class="btn btn--mini" data-tirar-email>Tirar</button></div>`;
+             autocapitalize="off" spellcheck="false" aria-label="${esc(tx('Outro e-mail para receber o PDF'))}">
+      <button type="button" class="btn btn--mini" data-tirar-email>${esc(tx('Tirar'))}</button></div>`;
   }
   function juntarEmails() {
     S.r.responsavel.email = $$('#tela-revisar .campo-email').map(el => el.value.trim()).filter(Boolean).join('; ');
@@ -1371,13 +1380,13 @@
     const marcar = (el, msg) => { el.classList.add('falta'); faltas.push({ el, msg }); };
 
     const r = S.r, t = tecnicoAtual();
-    if (padTec.vazia()) marcar($('#ass-tecnico'), 'Falta a assinatura do técnico.');
-    if (!r.responsavel.nome.trim()) marcar($('#f-resp-nome'), 'Falta o nome do responsável.');
+    if (padTec.vazia()) marcar($('#ass-tecnico'), tx('Falta a assinatura do técnico.'));
+    if (!r.responsavel.nome.trim()) marcar($('#f-resp-nome'), tx('Falta o nome do responsável.'));
     $$('#tela-revisar .campo-email').forEach(el => {
-      if (el.value.trim() && !emailValido(el.value)) marcar(el, 'Tem e-mail do cliente incompleto.');
+      if (el.value.trim() && !emailValido(el.value)) marcar(el, tx('Tem e-mail do cliente incompleto.'));
     });
-    if (padCli.vazia()) marcar($('#ass-cliente'), 'Falta a assinatura do responsável do cliente.');
-    if (!t) faltas.push({ el: null, msg: 'Volte ao início e identifique-se como técnico.' });
+    if (padCli.vazia()) marcar($('#ass-cliente'), tx('Falta a assinatura do responsável do cliente.'));
+    if (!t) faltas.push({ el: null, msg: tx('Volte ao início e identifique-se como técnico.') });
 
     if (faltas.length) {
       erro.textContent = faltas.map(f => f.msg).join(' ');
@@ -1391,8 +1400,8 @@
       return;
     }
     if (!r.responsavel.email.trim() && !(r.contatoEmail && r.enviarContato) &&
-        !await perguntar('Sem e-mail do cliente, o PDF vai só para você e para a equipe. Enviar assim?',
-                         'Enviar assim')) {
+        !await perguntar(tx('Sem e-mail do cliente, o PDF vai só para você e para a equipe. Enviar assim?'),
+                         tx('Enviar assim'))) {
       $('#f-resp-email').focus();
       return;
     }
@@ -1404,8 +1413,9 @@
     let rel = relogioDoRascunho(r);
     try {
       if (rel && rel.estado !== 'finalizado') {
-        if (!await perguntar(`O relógio da O.S. ${r.os.trim()} ainda está ${rel.estado === 'pausada' ? 'pausado' : 'correndo'}. ` +
-                             `Finalizar o serviço agora, às ${hhmm(Date.now())}, e enviar?`, 'Finalizar e enviar')) return;
+        if (!await perguntar(tx('O relógio da O.S. {os} ainda está {estado}. Finalizar o serviço agora, às {hora}, e enviar?',
+                                { os: r.os.trim(), estado: rel.estado === 'pausada' ? tx('pausado') : tx('correndo'), hora: hhmm(Date.now()) }),
+                             tx('Finalizar e enviar'))) return;
         await Relogio.finalizar(rel.id);
         rel = Relogio.resumo(rel.id);
       }
@@ -1415,9 +1425,9 @@
         let de = new Date(r.data + 'T08:00').getTime();
         if (!(de < Date.now())) de = Date.now() - 3600e3;
         const novo = await formHora({
-          titulo: `A O.S. ${ordem.os} não tem horário marcado`,
-          texto: 'Informe quando o serviço começou e quando terminou.',
-          horas: [{ rotulo: 'Início', hora: de }, { rotulo: 'Fim', hora: Date.now() }],
+          titulo: tx('A O.S. {os} não tem horário marcado', { os: ordem.os }),
+          texto: tx('Informe quando o serviço começou e quando terminou.'),
+          horas: [{ rotulo: tx('Início'), hora: de }, { rotulo: tx('Fim'), hora: Date.now() }],
           textoNao: 'Cancelar', textoOk: 'Salvar e enviar',
           salvar: d => Relogio.lancarPorFora(ordem, t.nome, d.horas[0], d.horas[1], d.just)
         });
@@ -1460,14 +1470,14 @@
        Com o rascunho saem os traços da assinatura do cliente; o PNG
        dela fica na fila só até o servidor confirmar (LGPD). */
     const btn = $('#btn-finalizar');
-    btn.disabled = true; btn.textContent = 'Enviando…';
+    btn.disabled = true; btn.textContent = tx('Enviando…');
     document.body.classList.add('carregando');
     try {
       try {
         await Fila.por(envio);
       } catch (e) {
-        erro.textContent = `Não consegui guardar o relatório neste celular: ${msgErro(e)} ` +
-                           'Ele continua aqui, aberto; tente de novo.';
+        erro.textContent = `${tx('Não consegui guardar o relatório neste celular:')} ${msgErro(e)} ` +
+                           tx('Ele continua aqui, aberto; tente de novo.');
         erro.hidden = false;
         erro.scrollIntoView({ behavior: 'smooth', block: 'center' });
         return;
@@ -1478,7 +1488,7 @@
       const res = await Fila.enviarAgora(envio.id);
       if (res) mostrarEnviado(res); else mostrarNaFila();
     } finally {
-      btn.disabled = false; btn.textContent = 'Finalizar e enviar';
+      btn.disabled = false; btn.textContent = tx('Finalizar e enviar');
       document.body.classList.remove('carregando');
     }
   }
@@ -1486,29 +1496,28 @@
   // ── Tela 4: enviado (ou guardado na fila) ──────────────────────
   function mostrarNaFila() {
     $('#feito-marca').textContent = '↑';
-    $('#t-enviado').textContent = 'Relatório fechado, na fila';
+    $('#t-enviado').textContent = tx('Relatório fechado, na fila');
     $('#feito-txt').textContent = navigator.onLine === false
-      ? 'Sem sinal agora. O relatório e as assinaturas estão guardados na fila deste celular.'
-      : 'O servidor não respondeu agora. O relatório e as assinaturas estão guardados na fila deste celular.';
+      ? tx('Sem sinal agora. O relatório e as assinaturas estão guardados na fila deste celular.')
+      : tx('O servidor não respondeu agora. O relatório e as assinaturas estão guardados na fila deste celular.');
     const aviso = $('#feito-aviso');
     aviso.hidden = false;
-    aviso.textContent = 'Ele sai sozinho quando a conexão voltar, com o app aberto. Se fechar o app, ' +
-                        'sai na próxima vez que abrir. Acompanhe em "Fila de envio", no início.';
+    aviso.textContent = tx('Ele sai sozinho quando a conexão voltar, com o app aberto. Se fechar o app, sai na próxima vez que abrir. Acompanhe em "Fila de envio", no início.');
     $('#feito-pdf').hidden = true;
     ir('enviado');
   }
 
   function mostrarEnviado(res) {
     $('#feito-marca').textContent = '✓';
-    $('#t-enviado').textContent = 'Relatório fechado';
+    $('#t-enviado').textContent = tx('Relatório fechado');
     $('#feito-txt').innerHTML = res.repetido
-      ? 'Este relatório já tinha sido fechado antes — nada foi enviado de novo.'
+      ? esc(tx('Este relatório já tinha sido fechado antes — nada foi enviado de novo.'))
       : res.enviadoPara
-        ? `O PDF foi enviado para <b>${esc(res.enviadoPara)}</b>.`
-        : 'O PDF foi salvo.';
+        ? tx('O PDF foi enviado para <b>{para}</b>.', { para: esc(res.enviadoPara) })
+        : esc(tx('O PDF foi salvo.'));
     const aviso = $('#feito-aviso');
     aviso.hidden = !res.erroEmail;
-    if (res.erroEmail) aviso.textContent = `${res.erroEmail} Abra o PDF e encaminhe ao cliente.`;
+    if (res.erroEmail) aviso.textContent = tx('{erro} Abra o PDF e encaminhe ao cliente.', { erro: res.erroEmail });
     const link = $('#feito-pdf');
     link.hidden = !res.pdf;
     link.href = res.pdf || '#';
@@ -1532,8 +1541,8 @@
     if (tela === 'preencher' || tela === 'revisar') renderFaixa();
 
     $('#topo-sub').textContent = S.r && tela !== 'inicio'
-      ? [S.r.os && 'O.S. ' + S.r.os, S.r.cliente].filter(Boolean).join(' · ') || 'Relatório de atendimento'
-      : 'Relatório de atendimento';
+      ? [S.r.os && tx('O.S. {os}', { os: S.r.os }), S.r.cliente].filter(Boolean).join(' · ') || tx('Relatório de atendimento')
+      : tx('Relatório de atendimento');
     window.scrollTo(0, 0);
   }
 
@@ -1557,7 +1566,7 @@
       if (desc) descartar(desc.dataset.descartar);
     });
     $('#btn-fila-tentar').addEventListener('click', () => {
-      toast(navigator.onLine === false ? 'Sem sinal: tento assim que a conexão voltar.' : 'Tentando enviar…');
+      toast(navigator.onLine === false ? tx('Sem sinal: tento assim que a conexão voltar.') : tx('Tentando enviar…'));
       Fila.tentar(true);
     });
     // o que foi digitado vai para o aparelho já, sem esperar os 250 ms,
@@ -1616,7 +1625,7 @@
       const i = +b.dataset.remover;
       const m = S.r.maquinas[i];
       if ((m.frota || m.serie || m.horimetro || m.descricao) &&
-          !await perguntar(`Remover a máquina ${i + 1}?`, 'Remover')) return;
+          !await perguntar(tx('Remover a máquina {n}?', { n: i + 1 }), tx('Remover'))) return;
       S.r.maquinas.splice(i, 1);
       salvar();
       renderMaquinas();
@@ -1634,7 +1643,7 @@
     $('#btn-revisar').addEventListener('click', () => {
       const faltas = validarPreencher();
       if (faltas.length) {
-        toast(faltas[0].msg + (faltas.length > 1 ? ` (e mais ${faltas.length - 1})` : ''));
+        toast(faltas[0].msg + (faltas.length > 1 ? tx(' (e mais {n})', { n: faltas.length - 1 }) : ''));
         faltas[0].el.scrollIntoView({ behavior: 'smooth', block: 'center' });
         return;
       }
@@ -1646,8 +1655,8 @@
     $$('[data-ir]').forEach(b => b.addEventListener('click', async () => {
       // o cliente assinou o texto que está aí; editar depois disso pede assinatura nova
       if (S.tela === 'revisar' && b.dataset.ir === 'preencher' && S.r && S.r.assinaturas.cliente) {
-        if (!await perguntar('Voltar para editar apaga a assinatura do cliente. Continuar?',
-                             'Voltar e editar')) return;
+        if (!await perguntar(tx('Voltar para editar apaga a assinatura do cliente. Continuar?'),
+                             tx('Voltar e editar'))) return;
         S.r.assinaturas.cliente = null;
       }
       ir(b.dataset.ir);
@@ -1669,12 +1678,14 @@
     S.inicioFalhou = false;
     try {
       S.inicio = await Servidor.inicio(S.codigo);
+      // quem é o técnico define o idioma da tela (coluna Idioma da aba Tecnicos)
+      if (S.inicio.voce && S.inicio.voce.idioma) I18n.definir(S.inicio.voce.idioma);
       // Os relógios do técnico (de qualquer aparelho) entram na gaveta do relógio e
       // não no cache da lista de O.S.
       const doServidor = S.inicio.relogios || [];
       delete S.inicio.relogios;
       Armazem.pref.gravar('inicio', S.inicio);
-      try { await Relogio.mesclar(doServidor); } catch (e) { mostrarErroFatal('Relógios do servidor: ' + msgErro(e)); }
+      try { await Relogio.mesclar(doServidor); } catch (e) { mostrarErroFatal(tx('Relógios do servidor: ') + msgErro(e)); }
       aviso.hidden = !S.inicio.avisoOrdens;
       aviso.textContent = S.inicio.avisoOrdens || '';
     } catch (e) {
@@ -1688,8 +1699,8 @@
         aviso.textContent = msgErro(e);
       } else {
         aviso.textContent = cache
-          ? 'Sem conexão com o servidor: mostrando a lista de O.S. da última vez.'
-          : `Não consegui carregar as O.S. (${msgErro(e)}). Dá para digitar a O.S. à mão.`;
+          ? tx('Sem conexão com o servidor: mostrando a lista de O.S. da última vez.')
+          : tx('Não consegui carregar as O.S. ({erro}). Dá para digitar a O.S. à mão.', { erro: msgErro(e) });
       }
       // App instalado sem login Kalmar (ou com a sessão vencida): o
       // login não abre escondido, então vai numa aba. Ao voltar para o
@@ -1700,7 +1711,7 @@
         a.href = Servidor.urlEntrar;
         a.target = '_blank';
         a.rel = 'noopener';
-        a.textContent = 'Entrar com a conta Kalmar';
+        a.textContent = tx('Entrar com a conta Kalmar');
         aviso.appendChild(a);
       }
       S.inicioFalhou = true;
@@ -1724,18 +1735,22 @@
     S.tecnicoEscolhido = tecnico || '';
     S.codigo = codigo || '';
     S.assinaturaLembrada = assinatura || null;
-    if (inicio) S.inicio = inicio;
+    if (inicio) {
+      S.inicio = inicio;
+      if (inicio.voce && inicio.voce.idioma) I18n.definir(inicio.voce.idioma);
+    }
     $('#aviso-memoria').hidden = Armazem.duravel;
 
     await Fila.iniciar({
       servidor: Servidor,
       aoMudar: () => { if (S.tela === 'inicio') { renderFila(); renderEnviados(); renderToquesFila(); } },
-      aoEnviar: feito => toast(`O.S. ${feito.os} enviada${feito.erroEmail ? ', mas o e-mail falhou' : ''}.`)
+      aoEnviar: feito => toast(feito.erroEmail ? tx('O.S. {os} enviada, mas o e-mail falhou.', { os: feito.os }) : tx('O.S. {os} enviada.', { os: feito.os }))
     });
     await Relogio.iniciarModulo({
       fila: Fila,
       aoMudar: () => { if (S.tela === 'inicio') { renderRelogio(); renderOrdens(); } else renderFaixa(); }
     });
+    await conferirTrocaDePais();
     ir('inicio');
     carregarInicio();
     registrarServiceWorker();
@@ -1758,6 +1773,20 @@
     document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') deNovo(); });
   }
 
+  /* ?pais=XX no endereço força o país. A lista de O.S. guardada é do país
+     de antes, então sai. Fila de envio e relógios abertos seriam mandados ao
+     servidor do país novo: com algo pendente, o app NÃO troca. */
+  async function conferirTrocaDePais() {
+    const pedido = Servidor.paisPedido;
+    if (!pedido) return;
+    const pendente = Fila.lista().length || Fila.toques().length || S.rascunhos.length ||
+                     Relogio.atual() || Relogio.pausadas().length;
+    if (pendente) { toast(tx('Há relatório, horário ou relógio pendente neste celular: termine antes de trocar de país.')); return; }
+    Servidor.definirPais(pedido);
+    S.inicio = { tecnicos: [], voce: null, ordens: [], avisoOrdens: '' };
+    await Armazem.pref.apagar('inicio');
+  }
+
   /* O service worker (sw.js) guarda o app no celular: com ele o app
      instalado abre sem sinal. Na página do Apps Script não existe (ela
      roda num iframe do Google, onde não dá para registrar). */
@@ -1766,14 +1795,37 @@
     navigator.serviceWorker.register('sw.js').catch(() => { /* sem ele o app funciona, só não abre offline */ });
   }
 
+  /* Pé da tela inicial: só "Projeto V10.00". Tocar mostra a versão de cada
+     arquivo (menos a deste, que é a do projeto), para achar o que ficou velho
+     no Apps Script. */
+  function renderCarimbo() {
+    const b = $('#carimbo'), lista = $('#versoes-arquivos');
+    b.textContent = tx('Projeto {v}', { v: VERSAO_PROJETO });
+    lista.textContent = Object.keys(VERSOES_ARQUIVOS).sort().map(n => `${n} ${VERSOES_ARQUIVOS[n]}`).join(' · ');
+  }
+
+  // O idioma mudou (o servidor reconheceu o técnico): refaz o que está na tela.
+  function aoTrocarIdioma() {
+    renderCarimbo();
+    $('#topo-sub').textContent = tx('Relatório de atendimento');
+    if (S.tela === 'inicio') renderInicio(); else { renderFaixa(); if (S.tela === 'revisar') renderLeitura(); }
+    I18n.traduzir(document);
+  }
+
   /* pegarErros() vem PRIMEIRO: se algo abaixo quebrar, o erro aparece
      na tela em vez de sumir no console. */
   pegarErros();
-  $('#carimbo').textContent = 'versão ' + (VERSAO.indexOf('__') === 0 ? 'local (Live Server)' : VERSAO);
+  renderCarimbo();
+  I18n.aoMudar(aoTrocarIdioma);
+  I18n.traduzir(document);
+  $('#carimbo').addEventListener('click', () => {
+    const lista = $('#versoes-arquivos');
+    lista.hidden = !lista.hidden || !lista.textContent;
+  });
   ligarEventos();
   prepararPergunta();
   prepararCaixa();
   prepararAssinaturas();
   iniciar();
 })();
-// -------- rat.js v8 --------
+// -------- rat.js v9 --------

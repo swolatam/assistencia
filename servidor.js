@@ -1,4 +1,4 @@
-// -------- servidor.js v4 --------
+// -------- servidor.js v5 --------
 /* ═══════════════════════════════════════════════════════════════
    SERVIDOR — a única porta do app para o servidor
 
@@ -26,9 +26,23 @@
 
    Erro de conexão (sem sinal, prazo estourado) sai com rede = true: a
    fila sabe que não adianta tentar os outros itens agora.
+
+   VÁRIOS PAÍSES (Brasil, Chile…): cada país tem o seu projeto Apps Script
+   e a sua planilha. O config.js traz um endereço /exec por país
+   ({ ponte: { BR: '…', CL: '…' } }) e o site é um só, com um link só.
+   O país é descoberto uma vez por aparelho: pergunta ao Brasil "quem sou
+   eu?"; se o e-mail não está na aba Tecnicos de lá (voce vem null), pergunta
+   ao Chile, e assim por diante. Quem reconhecer vira o país do aparelho
+   (guardado em localStorage) e das próximas vezes vai direto. Falha de
+   rede ou de login NÃO passa para o país seguinte (e não guarda país): uma
+   queda de sinal não pode mandar um técnico do Brasil para o Chile.
+   ?pais=CL no endereço pede o país à mão (quem decide é o rat.js, só com o
+   celular sem nada pendente). config.js com texto em vez de objeto = um país só.
    ═══════════════════════════════════════════════════════════════ */
 window.Servidor = (function () {
   'use strict';
+
+  const tx = I18n.t;   // português → idioma da tela (i18n.js)
 
   const PRAZO_INICIO    = 60 * 1000;
   const PRAZO_FINALIZAR = 120 * 1000;   // gera o PDF e manda e-mail: costuma levar 10–20 s
@@ -36,9 +50,41 @@ window.Servidor = (function () {
   const PRAZO_PONTE     = 25 * 1000;    // para o iframe abrir e dizer "pronta"
 
   const temGas   = !!(window.google && google.script && google.script.run);
-  const urlPonte = ((window.CONFIG || {}).ponte || '').trim();
+
+  // país → endereço /exec (a ordem do config.js é a ordem da descoberta)
+  const urls = {};
+  const cfgPonte = (window.CONFIG || {}).ponte;
+  if (typeof cfgPonte === 'string') {
+    if (cfgPonte.trim()) urls.BR = cfgPonte.trim();
+  } else if (cfgPonte && typeof cfgPonte === 'object') {
+    Object.keys(cfgPonte).forEach(p => {
+      const u = String(cfgPonte[p] || '').trim();
+      if (u) urls[p.toUpperCase()] = u;
+    });
+  }
+  const paises   = Object.keys(urls);
   const local    = /^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname);
-  const modo     = temGas ? 'gas' : urlPonte ? 'ponte' : (local && window.API_LOCAL) ? 'local' : 'nenhum';
+  const modo     = temGas ? 'gas' : paises.length ? 'ponte' : (local && window.API_LOCAL) ? 'local' : 'nenhum';
+
+  // ── País deste aparelho ────────────────────────────────────────
+  const CHAVE_PAIS = 'sistema-os-pais';
+  const lerPais = () => { try { return localStorage.getItem(CHAVE_PAIS) || ''; } catch (e) { return ''; } };
+  const gravarPais = p => { try { localStorage.setItem(CHAVE_PAIS, p); } catch (e) { /* vale só nesta abertura */ } };
+  let pais = paises.indexOf(lerPais()) >= 0 ? lerPais() : '';
+  const alvo = () => pais || paises[0];   // sem país descoberto ainda, o primeiro da lista
+
+  // ?pais=CL: pedido de troca. Não troca aqui; o rat.js decide (ver conferirTrocaDePais).
+  let paisPedido = '';
+  try {
+    const q = new URLSearchParams(location.search).get('pais');
+    if (q) {
+      const p = q.toUpperCase();
+      if (paises.indexOf(p) >= 0 && p !== pais) paisPedido = p;
+      const u = new URL(location.href);
+      u.searchParams.delete('pais');
+      history.replaceState(null, '', u.pathname + u.search + u.hash);
+    }
+  } catch (e) { /* sem o atalho, vale a descoberta */ }
 
   function chamarGas(metodo, ...args) {
     return new Promise((ok, falha) => {
@@ -53,7 +99,7 @@ window.Servidor = (function () {
   // dentro do iframe do script.google.com.
   const ORIGEM_GOOGLE = /^https:\/\/[a-z0-9-]+-script\.googleusercontent\.com$/;
 
-  let ponte = null;            // { iframe, janela, origem, pronta, aoFicarPronta }
+  const pontes = {};           // país → { pais, iframe, janela, origem, pronta, aoFicarPronta }
   let seq = 0;
   const esperando = new Map(); // id da chamada → { ok, falha }
 
@@ -70,18 +116,22 @@ window.Servidor = (function () {
   }
 
   window.addEventListener('message', ev => {
-    if (!ponte || !ORIGEM_GOOGLE.test(ev.origin)) return;
+    if (!ORIGEM_GOOGLE.test(ev.origin)) return;
+    const abertas = Object.keys(pontes).map(k => pontes[k]);
+    if (!abertas.length) return;
     const m = ev.data || {};
-    if (m.ponte === 'pronta' && !ponte.janela && deDentro(ev.source, ponte)) {
-      ponte.janela = ev.source;
-      ponte.origem = ev.origin;
-      ponte.aoFicarPronta();
-    } else if (m.ponte === 'resposta' && ev.source === ponte.janela) {
+    if (m.ponte === 'pronta') {
+      const p = abertas.find(x => !x.janela && deDentro(ev.source, x));
+      if (!p) return;
+      p.janela = ev.source;
+      p.origem = ev.origin;
+      p.aoFicarPronta();
+    } else if (m.ponte === 'resposta' && abertas.some(x => x.janela === ev.source)) {
       const p = esperando.get(m.id);
       if (!p) return;
       esperando.delete(m.id);
       if (m.ok) { p.ok(m.dados); return; }
-      const erro = new Error(m.erro || 'Erro no servidor.');
+      const erro = new Error(m.erro || tx('Erro no servidor.'));
       erro.tipo = m.tipo || '';
       p.falha(erro);
     }
@@ -93,45 +143,45 @@ window.Servidor = (function () {
   const erroRede = msg => Object.assign(new Error(msg), { rede: true });
 
   function erroPonte() {
-    if (navigator.onLine === false) return erroRede('Sem sinal.');
-    const erro = new Error('Não consegui entrar no servidor com a sua conta Kalmar.');
+    if (navigator.onLine === false) return erroRede(tx('Sem sinal.'));
+    const erro = new Error(tx('Não consegui entrar no servidor com a sua conta Kalmar.'));
     erro.tipo = 'login';
     return erro;
   }
 
   function fecharPonte(p) {
-    if (ponte !== p) return;
+    if (pontes[p.pais] !== p) return;
     p.iframe.remove();
-    ponte = null;
+    delete pontes[p.pais];
   }
 
-  function abrirPonte() {
-    if (ponte) return ponte.pronta;
+  function abrirPonte(sigla) {
+    if (pontes[sigla]) return pontes[sigla].pronta;
     const iframe = document.createElement('iframe');
     iframe.hidden = true;
     iframe.title = 'servidor';
-    iframe.src = urlPonte + '?ponte=1&origem=' + encodeURIComponent(location.origin);
-    const p = { iframe, janela: null, origem: '' };
+    iframe.src = urls[sigla] + '?ponte=1&origem=' + encodeURIComponent(location.origin);
+    const p = { pais: sigla, iframe, janela: null, origem: '' };
     p.pronta = new Promise((ok, falha) => {
       p.aoFicarPronta = ok;
       setTimeout(() => falha(erroPonte()), PRAZO_PONTE);
     });
     // não abriu: some, e a próxima chamada tenta um iframe novo
     p.pronta.catch(() => fecharPonte(p));
-    ponte = p;
+    pontes[sigla] = p;
     document.body.appendChild(iframe);
     return p.pronta;
   }
 
-  async function chamarPonte(metodo, args, prazo) {
-    await abrirPonte();
-    const p = ponte;
+  async function chamarPonte(sigla, metodo, args, prazo) {
+    await abrirPonte(sigla);
+    const p = pontes[sigla];
     const id = ++seq;
     return new Promise((ok, falha) => {
       const timer = setTimeout(() => {
         esperando.delete(id);
         fecharPonte(p);   // pode ter morrido: na próxima, abre outra
-        falha(erroRede('O servidor não respondeu a tempo.'));
+        falha(erroRede(tx('O servidor não respondeu a tempo.')));
       }, prazo);
       esperando.set(id, {
         ok:    d => { clearTimeout(timer); ok(d); },
@@ -144,19 +194,35 @@ window.Servidor = (function () {
   function comPrazo(promessa, ms) {
     let timer = 0;
     const estourou = new Promise((ok, falha) => {
-      timer = setTimeout(() => falha(erroRede('O servidor não respondeu a tempo.')), ms);
+      timer = setTimeout(() => falha(erroRede(tx('O servidor não respondeu a tempo.'))), ms);
     });
     return Promise.race([promessa, estourou]).finally(() => clearTimeout(timer));
   }
 
-  const semServidor = () => Promise.reject(new Error('Este app está sem servidor configurado (falta o config.js).'));
+  const semServidor = () => Promise.reject(new Error(tx('Este app está sem servidor configurado (falta o config.js).')));
+
+  const guardarPais = p => { pais = p; gravarPais(p); };
+
+  /* "Quem sou eu?" no país do aparelho; se o servidor não reconhece o e-mail
+     (voce null), procura nos outros. Sem país ainda: pergunta a cada um, na
+     ordem do config.js. Erro de rede/login sobe sem trocar nada. */
+  async function inicioPonte() {
+    const ordem = pais ? [pais].concat(paises.filter(p => p !== pais)) : paises;
+    let primeira = null;
+    for (const p of ordem) {
+      const d = await chamarPonte(p, 'inicio', [], PRAZO_INICIO);
+      if (d && d.voce) { if (p !== pais) guardarPais(p); return d; }
+      if (!primeira) primeira = d;
+    }
+    return primeira;   // ninguém reconheceu: a tela mostra o aviso de sempre
+  }
 
   const base = {
     gas:    { inicio: () => chamarGas('apiInicio'), finalizar: r => chamarGas('apiFinalizar', r),
               apontar: t => chamarGas('apiApontar', t) },
-    ponte:  { inicio: () => chamarPonte('inicio', [], PRAZO_INICIO),
-              finalizar: r => chamarPonte('finalizar', [r], PRAZO_FINALIZAR),
-              apontar: t => chamarPonte('apontar', [t], PRAZO_APONTAR) },
+    ponte:  { inicio: () => inicioPonte(),
+              finalizar: r => chamarPonte(alvo(), 'finalizar', [r], PRAZO_FINALIZAR),
+              apontar: t => chamarPonte(alvo(), 'apontar', [t], PRAZO_APONTAR) },
     local:  window.API_LOCAL,
     nenhum: { inicio: semServidor, finalizar: semServidor, apontar: semServidor }
   }[modo];
@@ -165,10 +231,15 @@ window.Servidor = (function () {
     modo,
     pedeCodigo: false,   // o código de técnico era do modo api (sem uso)
     // onde o técnico entra com a conta Kalmar quando a ponte não abre
-    urlEntrar: modo === 'ponte' ? urlPonte : '',
-    inicio:    () => comPrazo(base.inicio(), PRAZO_INICIO + PRAZO_PONTE),
+    get urlEntrar() { return modo === 'ponte' ? urls[alvo()] : ''; },
+    // país deste aparelho ('' = ainda não descoberto) e pedido de troca por ?pais=XX
+    get pais() { return pais; },
+    paises,
+    paisPedido,
+    definirPais: p => { if (paises.indexOf(p) >= 0) guardarPais(p); },
+    inicio:    () => comPrazo(base.inicio(), (PRAZO_INICIO + PRAZO_PONTE) * Math.max(1, paises.length)),
     finalizar: r  => comPrazo(base.finalizar(r), PRAZO_FINALIZAR + PRAZO_PONTE),
     apontar:   t  => comPrazo(base.apontar(t), PRAZO_APONTAR + PRAZO_PONTE)
   };
 })();
-// -------- servidor.js v4 --------
+// -------- servidor.js v5 --------

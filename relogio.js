@@ -1,4 +1,4 @@
-// -------- relogio.js v2 --------
+// -------- relogio.js v3 --------
 /* ═══════════════════════════════════════════════════════════════
    RELÓGIO DA O.S. — as horas de serviço, marcadas no celular
 
@@ -31,6 +31,8 @@
 window.Relogio = (function () {
   'use strict';
 
+  const tx = I18n.t;   // português → idioma da tela (i18n.js)
+
   const ESQUECIDO = 12 * 3600 * 1000;
   const FOLGA_FUTURO = 60 * 1000;     // relógio do celular arredonda: 1 min de folga
   const MIN_JUSTIFICATIVA = 10;
@@ -51,6 +53,7 @@ window.Relogio = (function () {
     inicio: 'Início', almoco: 'Almoço', volta: 'Volta do almoço', pausa: 'Pausa',
     retomada: 'Retomada', fim: 'Fim do serviço', cancelado: 'Cancelado'
   };
+  const nome = tipo => tx(NOMES[tipo] || tipo);
 
   let relogios = [];
   let fila = null;
@@ -85,8 +88,8 @@ window.Relogio = (function () {
       const passo = PASSOS[t.tipo];
       if (!passo) return;
       if (!erro && passo.de.indexOf(estado) < 0) {
-        erro = estado === null ? 'O primeiro registro tem de ser o Início.'
-             : `${NOMES[t.tipo]} às ${hhmm(t.hora)} não combina: nessa hora o relógio estava ${nomeEstado(estado)}.`;
+        erro = estado === null ? tx('O primeiro registro tem de ser o Início.')
+             : tx('{nome} às {hora} não combina: nessa hora o relógio estava {estado}.', { nome: nome(t.tipo), hora: hhmm(t.hora), estado: nomeEstado(estado) });
       }
       if (estado) trechos.push({ de: desde, ate: t.hora, estado });
       estado = passo.para;
@@ -96,8 +99,8 @@ window.Relogio = (function () {
     return { estado, desde, trechos, erro };
   }
 
-  const nomeEstado = e => ({ servico: 'em serviço', almoco: 'no almoço', pausada: 'pausada',
-                             finalizado: 'serviço finalizado', cancelado: 'cancelado' }[e] || e);
+  const nomeEstado = e => tx({ servico: 'em serviço', almoco: 'no almoço', pausada: 'pausada',
+                               finalizado: 'serviço finalizado', cancelado: 'cancelado' }[e] || e);
   const hhmm = ms => { const d = new Date(ms); return `${pad(d.getHours())}:${pad(d.getMinutes())}`; };
 
   function resumo(r, agora = Date.now()) {
@@ -154,8 +157,8 @@ window.Relogio = (function () {
   // ── O que as telas chamam ──────────────────────────────────────
   async function iniciar(ordem, tecnico) {
     const os = String(ordem.os || '').trim();
-    if (!os) throw new Error('Falta o número da O.S.');
-    if (!tecnico) throw new Error('Identifique-se como técnico primeiro.');
+    if (!os) throw new Error(tx('Falta o número da O.S.'));
+    if (!tecnico) throw new Error(tx('Identifique-se como técnico primeiro.'));
     const ja = daOs(os);
     if (ja) return retomar(ja.id);
     const agora = Date.now();
@@ -171,10 +174,10 @@ window.Relogio = (function () {
 
   async function retomar(id) {
     const r = relogios.find(x => x.id === id);
-    if (!r) throw new Error('Esse relógio não está mais neste celular.');
+    if (!r) throw new Error(tx('Esse relógio não está mais neste celular.'));
     const est = resumo(r).estado;
     if (ATIVO.indexOf(est) >= 0) return { relogio: r, pausou: null };
-    if (est !== 'pausada') throw new Error('Esse serviço já terminou.');
+    if (est !== 'pausada') throw new Error(tx('Esse serviço já terminou.'));
     const agora = Date.now();
     const pausada = await pausarOutra(r, agora, r.os);
     await registrar(r, { tipo: 'retomada', hora: agora });
@@ -186,9 +189,9 @@ window.Relogio = (function () {
   // para o almoço) é recusado com a explicação.
   async function tocar(id, tipo, motivo) {
     const r = relogios.find(x => x.id === id);
-    if (!r) throw new Error('Esse relógio não está mais neste celular.');
+    if (!r) throw new Error(tx('Esse relógio não está mais neste celular.'));
     const est = resumo(r).estado;
-    if (PASSOS[tipo].de.indexOf(est) < 0) throw new Error(`${NOMES[tipo]} não combina com o relógio ${nomeEstado(est)}.`);
+    if (PASSOS[tipo].de.indexOf(est) < 0) throw new Error(tx('{nome} não combina com o relógio {estado}.', { nome: nome(tipo), estado: nomeEstado(est) }));
     await registrar(r, { tipo, hora: Date.now(), motivo: motivo || '' });
     return r;
   }
@@ -199,11 +202,11 @@ window.Relogio = (function () {
      O.S. dele. Devolve o motivo da recusa, ou '' se aceitou. */
   function conferir(r, candidato, justificativa) {
     if (String(justificativa || '').trim().length < MIN_JUSTIFICATIVA) {
-      return `Escreva a justificativa (pelo menos ${MIN_JUSTIFICATIVA} letras).`;
+      return tx('Escreva a justificativa (pelo menos {n} letras).', { n: MIN_JUSTIFICATIVA });
     }
     const agora = Date.now();
-    if (!(candidato.hora > 0)) return 'Hora inválida.';
-    if (candidato.hora > agora + FOLGA_FUTURO) return 'A hora não pode ser no futuro.';
+    if (!(candidato.hora > 0)) return tx('Hora inválida.');
+    if (candidato.hora > agora + FOLGA_FUTURO) return tx('A hora não pode ser no futuro.');
     const teste = Object.assign({}, r, { toques: r.toques.concat(candidato) });
     const { erro, trechos } = repassar(linhaDoTempo(teste), agora);
     if (erro) return erro;
@@ -213,7 +216,7 @@ window.Relogio = (function () {
       const deles = repassar(linhaDoTempo(outro), agora).trechos.filter(t => ATIVO.indexOf(t.estado) >= 0);
       for (const a of meus) for (const b of deles) {
         if (a.de < b.ate && b.de < a.ate) {
-          return `Esse horário cruza com a O.S. ${outro.os} (${hhmm(b.de)}–${hhmm(b.ate)}).`;
+          return tx('Esse horário cruza com a O.S. {os} ({de}–{ate}).', { os: outro.os, de: hhmm(b.de), ate: hhmm(b.ate) });
         }
       }
     }
@@ -222,9 +225,9 @@ window.Relogio = (function () {
 
   async function ajustar(id, idToque, hora, justificativa) {
     const r = relogios.find(x => x.id === id);
-    if (!r) throw new Error('Esse relógio não está mais neste celular.');
+    if (!r) throw new Error(tx('Esse relógio não está mais neste celular.'));
     const alvo = linhaDoTempo(r).find(t => t.id === idToque);
-    if (!alvo) throw new Error('Esse registro não existe.');
+    if (!alvo) throw new Error(tx('Esse registro não existe.'));
     const ajuste = { id: novoId('TQ'), tipo: 'ajuste', corrige: idToque, hora, horaOriginal: alvo.hora,
                      justificativa: String(justificativa).trim(), criadoEm: Date.now() };
     const recusa = conferir(r, ajuste, justificativa);
@@ -235,8 +238,8 @@ window.Relogio = (function () {
 
   async function incluir(id, tipo, hora, justificativa, motivo) {
     const r = relogios.find(x => x.id === id);
-    if (!r) throw new Error('Esse relógio não está mais neste celular.');
-    if (!PASSOS[tipo]) throw new Error('Registro desconhecido.');
+    if (!r) throw new Error(tx('Esse relógio não está mais neste celular.'));
+    if (!PASSOS[tipo]) throw new Error(tx('Registro desconhecido.'));
     const toque = { id: novoId('TQ'), tipo, hora, motivo: motivo || '', justificativa: String(justificativa).trim(),
                     criadoEm: Date.now() };
     const recusa = conferir(r, toque, justificativa);
@@ -255,7 +258,7 @@ window.Relogio = (function () {
     };
     const ini = { id: novoId('TQ'), tipo: 'inicio', hora: de, motivo: '', justificativa, criadoEm: Date.now() };
     const fim = { id: novoId('TQ'), tipo: 'fim', hora: ate, motivo: '', justificativa, criadoEm: Date.now() + 1 };
-    if (!(ate > de)) throw new Error('O fim tem de ser depois do início.');
+    if (!(ate > de)) throw new Error(tx('O fim tem de ser depois do início.'));
     // confere o par: o início sozinho seria um relógio correndo até agora
     const recusa = conferir(Object.assign({}, r, { toques: [ini] }), fim, justificativa);
     if (recusa) throw new Error(recusa);
@@ -322,6 +325,7 @@ window.Relogio = (function () {
 
   return {
     NOMES,
+    nome,
     iniciarModulo,
     iniciar,
     retomar,
@@ -349,4 +353,4 @@ window.Relogio = (function () {
     ordem:      id => { const r = relogios.find(x => x.id === id); return r ? Object.assign({}, r.ordem) : null; }
   };
 })();
-// -------- relogio.js v2 --------
+// -------- relogio.js v3 --------

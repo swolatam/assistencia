@@ -1,4 +1,4 @@
-// -------- armazem.js v2 --------
+// -------- armazem.js v3 --------
 /* ═══════════════════════════════════════════════════════════════
    ARMAZÉM — o que fica guardado no aparelho
 
@@ -63,7 +63,7 @@ window.Armazem = (function () {
         ok(d);
       };
       r.onerror = () => falha(r.error);
-      r.onblocked = () => falha(new Error('o banco do app está preso por outra aba'));
+      r.onblocked = () => falha(new Error(I18n.t('o banco do app está preso por outra aba')));
     });
   }
 
@@ -73,7 +73,7 @@ window.Armazem = (function () {
     fn(tx.objectStore(gaveta));
     return new Promise((ok, falha) => {
       tx.oncomplete = () => ok();
-      tx.onerror = tx.onabort = () => falha(tx.error || new Error('não gravou no aparelho'));
+      tx.onerror = tx.onabort = () => falha(tx.error || new Error(I18n.t('não gravou no aparelho')));
     });
   }
 
@@ -152,4 +152,4 @@ window.Armazem = (function () {
     pref:      { ler: k => ler('prefs', k), gravar: (k, v) => gravar('prefs', v, k), apagar: k => apagar('prefs', k) }
   };
 })();
-// -------- armazem.js v2 --------
+// -------- armazem.js v3 --------
