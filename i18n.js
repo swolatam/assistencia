@@ -1,4 +1,4 @@
-// -------- i18n.js v2 --------
+// -------- i18n.js v3 --------
 /* ═══════════════════════════════════════════════════════════════
    IDIOMA DA TELA (português do Brasil e espanhol)
 
@@ -399,6 +399,7 @@ window.I18n = (function () {
     'Relógio da O.S.: ': 'Reloj de la OS: ',
     'Aguardando o número da O.S.': 'Esperando el número de la OS',
     'pedido {quando}': 'pedido {quando}',
+    'Não consegui baixar a lista de clientes: {erro}': 'No pude descargar la lista de clientes: {erro}',
   };
 
   const DICIONARIOS = { ES };
@@ -484,4 +485,4 @@ window.I18n = (function () {
     dicionario: () => ES
   };
 })();
-// -------- i18n.js v2 --------
+// -------- i18n.js v3 --------

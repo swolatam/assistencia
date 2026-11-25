@@ -1,4 +1,4 @@
-// -------- rat.js v10 --------
+// -------- rat.js v11 --------
 /* ═══════════════════════════════════════════════════════════════
    ASSISTÊNCIA TÉCNICA — lógica da página (as telas)
 
@@ -32,8 +32,8 @@
      de cada arquivo, para achar o que ficou velho no Apps Script. As
      versões dos arquivos o build.py (Apps Script) e o publicar.py (site)
      trocam em __VERSOES__; no Live Server a lista fica vazia. */
-  const VERSAO_PROJETO = 'V11.00';
-  const VERSOES_TXT = '{"rat.css": "v7", "i18n.js": "v2", "servidor.js": "v6", "armazem.js": "v3", "fila.js": "v3", "relogio.js": "v4", "sw.js": "v4", "index.html": "v7"}';
+  const VERSAO_PROJETO = 'V11.01';
+  const VERSOES_TXT = '{"rat.css": "v7", "i18n.js": "v3", "servidor.js": "v6", "armazem.js": "v3", "fila.js": "v3", "relogio.js": "v4", "sw.js": "v4", "index.html": "v7"}';
   const VERSOES_ARQUIVOS = VERSOES_TXT.indexOf('__') === 0 ? {} : JSON.parse(VERSOES_TXT);
 
   const tx = I18n.t;   // frase em português → idioma da tela (i18n.js)
@@ -1721,16 +1721,20 @@
       const op = await Servidor.opcoesOS();
       S.opcoesOS = { clientes: op.clientes || [], tipos: op.tipos || [], em: Date.now() };
       Armazem.pref.gravar('opcoesOS', S.opcoesOS);
-    } catch (e) { /* sem sinal: fica o guardado, se houver */ }
+      S.erroOpcoesOS = '';
+    } catch (e) { S.erroOpcoesOS = msgErro(e); /* sem sinal: fica o guardado, se houver */ }
     return S.opcoesOS || null;
   }
 
   async function abrirOSNova() {
     if (!exigirTecnico()) return;
-    const op = await carregarOpcoesOS(false);
+    let op = await carregarOpcoesOS(false);
+    if (!op || !op.clientes.length) op = await carregarOpcoesOS(true);   // nada guardado: tenta agora
     if (!op || !op.clientes.length) {
-      toast(tx('Ainda não baixei a lista de clientes. Abra o app com sinal uma vez para poder abrir O.S.'));
-      carregarOpcoesOS(true);
+      // com sinal, mostra o motivo de verdade (chave, cadastro, acesso ao NewSimova…)
+      toast(navigator.onLine !== false && S.erroOpcoesOS
+        ? tx('Não consegui baixar a lista de clientes: {erro}', { erro: S.erroOpcoesOS })
+        : tx('Ainda não baixei a lista de clientes. Abra o app com sinal uma vez para poder abrir O.S.'));
       return;
     }
     const porNome = new Map(op.clientes.map(c => [semAcento(c[1]), c]));
@@ -1976,4 +1980,4 @@
   prepararAssinaturas();
   iniciar();
 })();
-// -------- rat.js v10 --------
+// -------- rat.js v11 --------
