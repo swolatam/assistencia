@@ -1,4 +1,4 @@
-// -------- servidor.js v5 --------
+// -------- servidor.js v6 --------
 /* ═══════════════════════════════════════════════════════════════
    SERVIDOR — a única porta do app para o servidor
 
@@ -47,6 +47,7 @@ window.Servidor = (function () {
   const PRAZO_INICIO    = 60 * 1000;
   const PRAZO_FINALIZAR = 120 * 1000;   // gera o PDF e manda e-mail: costuma levar 10–20 s
   const PRAZO_APONTAR   = 60 * 1000;    // uma linha na planilha
+  const PRAZO_ABRIR     = 40 * 1000;    // o servidor do app ainda chama o NewSimova
   const PRAZO_PONTE     = 25 * 1000;    // para o iframe abrir e dizer "pronta"
 
   const temGas   = !!(window.google && google.script && google.script.run);
@@ -219,13 +220,27 @@ window.Servidor = (function () {
 
   const base = {
     gas:    { inicio: () => chamarGas('apiInicio'), finalizar: r => chamarGas('apiFinalizar', r),
-              apontar: t => chamarGas('apiApontar', t) },
+              apontar: t => chamarGas('apiApontar', t),
+              opcoesOS: () => chamarGas('apiOpcoesOS'), abrirOS: p => chamarGas('apiAbrirOS', p) },
     ponte:  { inicio: () => inicioPonte(),
               finalizar: r => chamarPonte(alvo(), 'finalizar', [r], PRAZO_FINALIZAR),
-              apontar: t => chamarPonte(alvo(), 'apontar', [t], PRAZO_APONTAR) },
+              apontar: t => chamarPonte(alvo(), 'apontar', [t], PRAZO_APONTAR),
+              opcoesOS: () => chamarPonte(alvo(), 'opcoesOS', [], PRAZO_ABRIR),
+              abrirOS: p => chamarPonte(alvo(), 'abrirOS', [p], PRAZO_ABRIR) },
     local:  window.API_LOCAL,
-    nenhum: { inicio: semServidor, finalizar: semServidor, apontar: semServidor }
+    nenhum: { inicio: semServidor, finalizar: semServidor, apontar: semServidor, opcoesOS: semServidor, abrirOS: semServidor }
   }[modo];
+
+  /* Abrir O.S. nova (NewSimova dá o número): o servidor responde { ok, dados } ou
+     { ok:false, erro, temporario }. temporario (o NewSimova não respondeu) vira erro de
+     rede, e a fila tenta de novo; recusa vira erro comum, que a tela mostra. */
+  const abrirPrazo = f => async (...args) => {
+    const r = await comPrazo(f(...args), PRAZO_ABRIR + PRAZO_PONTE);
+    if (r && r.ok) return r.dados;
+    const erro = new Error((r && r.erro) || tx('Erro no servidor.'));
+    erro.rede = !!(r && r.temporario);
+    throw erro;
+  };
 
   return {
     modo,
@@ -239,7 +254,9 @@ window.Servidor = (function () {
     definirPais: p => { if (paises.indexOf(p) >= 0) guardarPais(p); },
     inicio:    () => comPrazo(base.inicio(), (PRAZO_INICIO + PRAZO_PONTE) * Math.max(1, paises.length)),
     finalizar: r  => comPrazo(base.finalizar(r), PRAZO_FINALIZAR + PRAZO_PONTE),
-    apontar:   t  => comPrazo(base.apontar(t), PRAZO_APONTAR + PRAZO_PONTE)
+    apontar:   t  => comPrazo(base.apontar(t), PRAZO_APONTAR + PRAZO_PONTE),
+    opcoesOS:  abrirPrazo(() => base.opcoesOS()),      // clientes e tipos de serviço para o formulário
+    abrirOS:   abrirPrazo(p => base.abrirOS(p))        // { id } com o número de verdade
   };
 })();
-// -------- servidor.js v5 --------
+// -------- servidor.js v6 --------

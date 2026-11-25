@@ -1,4 +1,4 @@
-// -------- rat.js v9 --------
+// -------- rat.js v10 --------
 /* ═══════════════════════════════════════════════════════════════
    ASSISTÊNCIA TÉCNICA — lógica da página (as telas)
 
@@ -32,8 +32,8 @@
      de cada arquivo, para achar o que ficou velho no Apps Script. As
      versões dos arquivos o build.py (Apps Script) e o publicar.py (site)
      trocam em __VERSOES__; no Live Server a lista fica vazia. */
-  const VERSAO_PROJETO = 'V10.00';
-  const VERSOES_TXT = '{"rat.css": "v6", "i18n.js": "v1", "servidor.js": "v5", "armazem.js": "v3", "fila.js": "v2", "relogio.js": "v3", "sw.js": "v4", "index.html": "v6"}';
+  const VERSAO_PROJETO = 'V11.00';
+  const VERSOES_TXT = '{"rat.css": "v7", "i18n.js": "v2", "servidor.js": "v6", "armazem.js": "v3", "fila.js": "v3", "relogio.js": "v4", "sw.js": "v4", "index.html": "v7"}';
   const VERSOES_ARQUIVOS = VERSOES_TXT.indexOf('__') === 0 ? {} : JSON.parse(VERSOES_TXT);
 
   const tx = I18n.t;   // frase em português → idioma da tela (i18n.js)
@@ -99,13 +99,15 @@
      relatório já enviado continua enviado. É a saída quando alguma
      coisa trava, e por isso a pergunta conta o que ainda NÃO saiu. */
   async function zerarCelular() {
-    const naFila = Fila.lista().length;
+    const naFila = Fila.lista().length - Fila.aberturas().length;
+    const pedidos = Fila.aberturas().length;
     const abertos = S.rascunhos.length;
     const relogios = (Relogio.atual() ? 1 : 0) + Relogio.pausadas().length;
     const toques = Fila.toques().length;
     const perde = [
       abertos && plural(abertos, 'relatório em andamento', 'relatórios em andamento'),
       naFila && plural(naFila, 'relatório assinado que AINDA NÃO SAIU', 'relatórios assinados que AINDA NÃO SAÍRAM'),
+      pedidos && plural(pedidos, 'pedido de O.S. nova que ainda não recebeu o número', 'pedidos de O.S. nova que ainda não receberam o número'),
       relogios && plural(relogios, 'relógio de O.S. aberto', 'relógios de O.S. abertos'),
       toques && plural(toques, 'registro de horário que ainda não subiu', 'registros de horário que ainda não subiram')
     ].filter(Boolean);
@@ -395,10 +397,11 @@
       : tx('Saem sozinhos assim que o servidor responder.');
     $('#lista-fila').innerHTML = itens.map(i => {
       const estado = i.enviando ? tx('Enviando…')
+        : i.ultimoErro === 'Aguardando o número da O.S.' ? tx(i.ultimoErro)
         : i.ultimoErro ? tx('Não foi: {erro} Tenta de novo {quando}.', { erro: tx(i.ultimoErro), quando: quando(i.proximaEm) })
         : tx('Esperando para enviar.');
       return `<div class="ordem ordem--fila">
-        <span class="ordem__cab"><span class="ordem__os">${esc(i.envio.os)}</span><span class="ordem__data">${esc(tx('fechado {quando}', { quando: quando(i.criadoEm) }))}</span></span>
+        <span class="ordem__cab"><span class="ordem__os">${esc(i.envio.os)}</span><span class="ordem__data">${esc(i.tipo === 'abertura' ? tx('pedido {quando}', { quando: quando(i.criadoEm) }) : tx('fechado {quando}', { quando: quando(i.criadoEm) }))}</span></span>
         <span class="ordem__cliente">${esc(i.envio.cliente || '—')}</span>
         <span class="ordem__selo">${esc(estado)}</span>
       </div>`;
@@ -459,26 +462,40 @@
      precisa lançar um segundo atendimento acha digitando o número da
      O.S. na busca. Por número e só por número: buscar pelo cliente
      traria de volta o histórico inteiro dele. */
+  let listaVisivel = [];   // o que está na tela, na ordem: o toque em data-i procura aqui
+
   function renderOrdens() {
     const termo = semAcento($('#busca').value.trim());
-    const todas = S.inicio.ordens || [];
-    const pendentes = todas.filter(o => !o.feito);
+    // pedidos de O.S. nova que ainda esperam o número do NewSimova (NOVA-xxxxx) ficam no topo
+    const provisorias = Fila.aberturas().map(i => ({
+      os: i.envio.id, data: hojeIso(), cliente: i.envio.cliente || '', descricao: i.envio.descricao || '',
+      serie: i.envio.serial || '', feito: false, provisoria: true
+    }));
+    const todas = provisorias.concat(S.inicio.ordens || []);
+    const suas = todas.filter(o => !o.deOutro);
+    const alheias = todas.filter(o => o.deOutro);   // O.S. aberta de colegas: só aparece quando se busca
+    const pendentes = suas.filter(o => !o.feito);
     const achadas = termo
-      ? todas.filter(o => o.feito
+      ? suas.filter(o => o.feito
           ? semAcento(o.os).includes(termo)
           : semAcento([o.os, o.cliente, o.serie, o.modelo, o.descricao].join(' ')).includes(termo))
       : pendentes;
+    const deOutros = termo
+      ? alheias.filter(o => semAcento([o.os, o.cliente, o.serie, o.modelo, o.descricao, o.tecnicos].join(' ')).includes(termo))
+      : [];
 
     const caixa = $('#ordens');
     if (!todas.length) {
+      listaVisivel = [];
       caixa.innerHTML = Servidor.pedeCodigo && !S.inicio.voce
         ? '<p class="vazio">Entre com o seu código de técnico para ver as O.S.</p>'
         : document.body.classList.contains('carregando')
         ? `<p class="vazio">${esc(tx('Carregando as O.S.…'))}</p>`
-        : `<p class="vazio">${esc(tx('Nenhuma O.S. na lista. Use o botão abaixo para digitar.'))}</p>`;
+        : `<p class="vazio">${esc(tx('Nenhuma O.S. na lista. Use o botão abaixo para abrir uma O.S. nova.'))}</p>`;
       return;
     }
-    if (!achadas.length) {
+    if (!achadas.length && !deOutros.length) {
+      listaVisivel = [];
       caixa.innerHTML = termo
         ? `<p class="vazio">${esc(tx('Nada encontrado com esse termo. Se a O.S. já foi encerrada, digite o número dela.'))}</p>`
         : `<p class="vazio">${esc(tx('Nenhuma O.S. em aberto. Para um segundo atendimento, digite o número da O.S. na busca.'))}</p>`;
@@ -487,21 +504,33 @@
 
     // fechadas por último: quem está com uma O.S. em aberto vê a dela primeiro
     const ordenadas = achadas.slice().sort((a, b) => (a.feito ? 1 : 0) - (b.feito ? 1 : 0));
+    const mostradas = ordenadas.slice(0, MAX_NA_LISTA);
+    const outrosMostrados = deOutros.slice(0, MAX_NA_LISTA);
+    listaVisivel = mostradas.concat(outrosMostrados);
 
-    caixa.innerHTML = ordenadas.slice(0, MAX_NA_LISTA).map(o => {
+    const cartao = (o, i) => {
       const extra = [o.modelo, o.serie ? 'S/N ' + o.serie : '', o.descricao].filter(Boolean).join(' · ');
       const rel = Relogio.daOs(o.os);
       const selo = esc(rel ? tx(SELO_RELOGIO[rel.estado] || '')
         : rascunhoDa(o.os) ? tx('Em andamento neste celular · toque para continuar')
+        : o.provisoria ? tx('Esperando o número da O.S. · pode trabalhar normalmente')
+        : o.deOutro ? tx('Com {nomes}', { nomes: o.tecnicos || tx('ninguém ainda') })
         : o.feito ? tx('Já encerrada · novo relatório sai como v2') : '');
-      return `<button type="button" class="ordem${o.feito ? ' ordem--feita' : ''}" data-i="${todas.indexOf(o)}">
+      return `<button type="button" class="ordem${o.feito ? ' ordem--feita' : ''}" data-i="${i}">
         <span class="ordem__cab"><span class="ordem__os">${esc(o.os)}</span><span class="ordem__data">${esc(br(o.data))}</span></span>
         <span class="ordem__cliente">${esc(o.cliente || '—')}</span>
         ${extra ? `<span class="ordem__extra">${esc(extra)}</span>` : ''}
         ${selo ? `<span class="ordem__selo">${selo}</span>` : ''}
       </button>`;
-    }).join('') + (ordenadas.length > MAX_NA_LISTA
-      ? `<p class="vazio">${esc(tx('Mostrando {max} de {total}. Digite para filtrar.', { max: MAX_NA_LISTA, total: ordenadas.length }))}</p>` : '');
+    };
+
+    caixa.innerHTML = mostradas.map((o, i) => cartao(o, i)).join('') +
+      (ordenadas.length > MAX_NA_LISTA
+        ? `<p class="vazio">${esc(tx('Mostrando {max} de {total}. Digite para filtrar.', { max: MAX_NA_LISTA, total: ordenadas.length }))}</p>` : '') +
+      (outrosMostrados.length
+        ? `<h3 class="titulo titulo--secao">${esc(tx('O.S. de outros técnicos'))}</h3>` +
+          outrosMostrados.map((o, i) => cartao(o, mostradas.length + i)).join('')
+        : '');
   }
 
   const rascunhoDa = os => (os ? S.rascunhos.find(r => r.os.trim() === os) : null);
@@ -1486,7 +1515,7 @@
       // os toques já estão na fila: o relógio terminado sai do celular
       try { await Relogio.arquivar(rel.id); } catch (e) { /* fica na lista; não atrapalha o envio */ }
       const res = await Fila.enviarAgora(envio.id);
-      if (res) mostrarEnviado(res); else mostrarNaFila();
+      if (res) mostrarEnviado(res); else mostrarNaFila(Fila.ehProvisorio(envio.os));
     } finally {
       btn.disabled = false; btn.textContent = tx('Finalizar e enviar');
       document.body.classList.remove('carregando');
@@ -1494,10 +1523,12 @@
   }
 
   // ── Tela 4: enviado (ou guardado na fila) ──────────────────────
-  function mostrarNaFila() {
+  function mostrarNaFila(semNumero) {
     $('#feito-marca').textContent = '↑';
     $('#t-enviado').textContent = tx('Relatório fechado, na fila');
-    $('#feito-txt').textContent = navigator.onLine === false
+    $('#feito-txt').textContent = semNumero
+      ? tx('A O.S. ainda não tem número de verdade (o NewSimova dá o número quando houver sinal). O relatório e as assinaturas estão guardados e saem sozinhos, com o número certo, assim que ele chegar.')
+      : navigator.onLine === false
       ? tx('Sem sinal agora. O relatório e as assinaturas estão guardados na fila deste celular.')
       : tx('O servidor não respondeu agora. O relatório e as assinaturas estão guardados na fila deste celular.');
     const aviso = $('#feito-aviso');
@@ -1551,9 +1582,9 @@
     $('#busca').addEventListener('input', renderOrdens);
     $('#ordens').addEventListener('click', e => {
       const b = e.target.closest('.ordem');
-      if (b) comecar(S.inicio.ordens[+b.dataset.i]);
+      if (b && listaVisivel[+b.dataset.i]) comecar(listaVisivel[+b.dataset.i]);
     });
-    $('#btn-manual').addEventListener('click', () => comecar({}));
+    $('#btn-abrir').addEventListener('click', abrirOSNova);
     // botões do relógio (cartão do topo e pausadas), por delegação
     $('#tela-inicio').addEventListener('click', e => {
       const b = e.target.closest('[data-rel]');
@@ -1663,6 +1694,121 @@
     }));
   }
 
+  /* ── Abrir O.S. nova ──────────────────────────────────────────────
+     Só o NewSimova dá o número (a trava dele impede números repetidos).
+       • com sinal: o pedido vai na hora e o número de verdade volta;
+       • sem sinal: o pedido espera na fila com um número provisório
+         NOVA-xxxxx, o técnico já trabalha com ele, e quando o sinal volta
+         o pedido sobe, o número chega e tudo que usava o provisório passa
+         para o de verdade (aoAbrirOS). PDF com NOVA- nunca sai (fila.js).
+     A O.S. nasce Solicitada e o gestor a programa. O mesmo pedido enviado
+     duas vezes (queda no meio) volta com a mesma O.S.: o id do pedido é o
+     NOVA-xxxxx. Clientes e tipos vêm do NewSimova e ficam guardados no
+     celular para o formulário abrir também sem sinal. */
+  const novoNumeroProvisorio = () => {
+    const letras = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    let n;
+    do {
+      n = 'NOVA-' + Array.from({ length: 5 }, () => letras[Math.floor(Math.random() * letras.length)]).join('');
+    } while (Fila.aberturas().some(i => i.envio.id === n) || S.rascunhos.some(r => r.os === n) || Relogio.daOs(n));
+    return n;
+  };
+
+  async function carregarOpcoesOS(forcar) {
+    if (!S.opcoesOS) { try { S.opcoesOS = await Armazem.pref.ler('opcoesOS'); } catch (e) { /* sem o guardado */ } }
+    if (S.opcoesOS && !forcar) return S.opcoesOS;
+    try {
+      const op = await Servidor.opcoesOS();
+      S.opcoesOS = { clientes: op.clientes || [], tipos: op.tipos || [], em: Date.now() };
+      Armazem.pref.gravar('opcoesOS', S.opcoesOS);
+    } catch (e) { /* sem sinal: fica o guardado, se houver */ }
+    return S.opcoesOS || null;
+  }
+
+  async function abrirOSNova() {
+    if (!exigirTecnico()) return;
+    const op = await carregarOpcoesOS(false);
+    if (!op || !op.clientes.length) {
+      toast(tx('Ainda não baixei a lista de clientes. Abra o app com sinal uma vez para poder abrir O.S.'));
+      carregarOpcoesOS(true);
+      return;
+    }
+    const porNome = new Map(op.clientes.map(c => [semAcento(c[1]), c]));
+    const pedido = await abrirCaixa(`
+      <p class="modal__txt"><b>${esc(tx('Abrir O.S. nova'))}</b><br>${esc(tx('A O.S. nasce como Solicitada; o gestor confere e programa.'))}</p>
+      <div class="cp"><label for="cx-cli">${esc(tx('Cliente'))}</label>
+        <input class="campo" id="cx-cli" list="cx-clientes" autocomplete="off" placeholder="${esc(tx('Comece a digitar o nome'))}">
+        <datalist id="cx-clientes">${op.clientes.map(c => `<option value="${esc(c[1])}"></option>`).join('')}</datalist></div>
+      <div class="cp" id="cx-site-cp" hidden><label for="cx-site">${esc(tx('Local'))}</label>
+        <select class="campo" id="cx-site"></select></div>
+      <div class="cp"><label for="cx-tipo">${esc(tx('Tipo de serviço'))}</label>
+        <select class="campo" id="cx-tipo">${op.tipos.map(t => `<option value="${esc(t[0])}">${esc(t[1])}</option>`).join('')}</select></div>
+      <div class="cp"><label for="cx-desc">${esc(tx('O que vai fazer'))}</label>
+        <textarea class="campo" id="cx-desc" rows="3" maxlength="500"></textarea></div>
+      <div class="cp"><label for="cx-serie">${esc(tx('Série da máquina (se souber)'))}</label>
+        <input class="campo" id="cx-serie" autocomplete="off" maxlength="40"></div>
+      <p class="erro" hidden></p>
+      <div class="modal__acoes">
+        <button type="button" class="btn btn--fantasma" data-fechar>${esc(tx('Cancelar'))}</button>
+        <button type="button" class="btn btn--acento" id="cx-ok">${esc(tx('Abrir O.S.'))}</button>
+      </div>`, corpo => {
+      const cli = corpo.querySelector('#cx-cli'), siteCp = corpo.querySelector('#cx-site-cp'), site = corpo.querySelector('#cx-site');
+      const escolhido = () => porNome.get(semAcento(cli.value.trim()));
+      cli.addEventListener('input', () => {
+        const c = escolhido(), sites = c ? c[2] : [];
+        siteCp.hidden = !sites.length;
+        site.innerHTML = sites.length
+          ? `<option value="">${esc(tx('(não sei)'))}</option>` + sites.map(x => `<option value="${esc(x[0])}">${esc(x[1])}</option>`).join('')
+          : '';
+      });
+      const ok = corpo.querySelector('#cx-ok');
+      ok.addEventListener('click', async () => {
+        const c = escolhido(), desc = corpo.querySelector('#cx-desc').value.trim();
+        if (!c) { erroCaixa(tx('Escolha o cliente da lista.')); return; }
+        if (desc.length < 5) { erroCaixa(tx('Descreva o que vai fazer (poucas palavras bastam).')); return; }
+        const dados = {
+          id: novoNumeroProvisorio(), pedido: '', cliente_id: c[0], cliente: c[1], site_id: site.value || '',
+          tipo_servico: corpo.querySelector('#cx-tipo').value, descricao: desc, serial: corpo.querySelector('#cx-serie').value.trim()
+        };
+        dados.pedido = dados.id;
+        ok.disabled = true; ok.textContent = tx('Abrindo…');
+        const volta = () => { ok.disabled = false; ok.textContent = tx('Abrir O.S.'); };
+        try {
+          const res = await Servidor.abrirOS(dados);      // com sinal: o número de verdade
+          fecharCaixa({ ordem: { os: res.id, cliente: c[1], descricao: desc, serie: dados.serial, data: hojeIso() }, numero: true });
+        } catch (e) {
+          if ((e && e.rede) || navigator.onLine === false) {
+            try { await Fila.porAbertura(dados); } catch (e2) { erroCaixa(msgErro(e2)); volta(); return; }
+            fecharCaixa({ ordem: { os: dados.id, cliente: c[1], descricao: desc, serie: dados.serial, data: hojeIso(), provisoria: true }, numero: false });
+          } else {
+            erroCaixa(msgErro(e));    // o NewSimova recusou: o técnico vê o motivo e nada fica na fila
+            volta();
+          }
+        }
+      });
+    });
+    if (!pedido) return;
+    if (pedido.numero) { toast(tx('O.S. {os} aberta.', { os: pedido.ordem.os })); carregarInicio(); }
+    else toast(tx('Sem sinal: a O.S. recebe o número quando o sinal voltar. Pode trabalhar normalmente.'));
+    renderOrdens();
+    await comecar(pedido.ordem);
+  }
+
+  /* O número de verdade chegou: o provisório some de tudo que o usava
+     (a fila já trocou os toques e relatórios que esperavam). */
+  async function aoAbrirOS({ de, para }) {
+    try { await Relogio.renomearOs(de, para); } catch (e) { mostrarErroFatal(tx('Relógio da O.S.: ') + msgErro(e)); }
+    S.rascunhos.forEach(r => {
+      if (String(r.os).trim() !== de) return;
+      r.os = para;
+      if (S.r === r && $('#f-os')) $('#f-os').value = para;
+      sujos.add(r);
+    });
+    gravarSujos();
+    toast(tx('A O.S. {de} agora é a {para}.', { de, para }));
+    carregarInicio();
+  }
+
   // ── Início ─────────────────────────────────────────────────────
   async function carregarInicio() {
     const aviso = $('#aviso-ordens');
@@ -1688,6 +1834,7 @@
       try { await Relogio.mesclar(doServidor); } catch (e) { mostrarErroFatal(tx('Relógios do servidor: ') + msgErro(e)); }
       aviso.hidden = !S.inicio.avisoOrdens;
       aviso.textContent = S.inicio.avisoOrdens || '';
+      if (S.inicio.voce) carregarOpcoesOS(true);   // clientes e tipos para abrir O.S. mesmo sem sinal depois
     } catch (e) {
       aviso.hidden = false;
       if (e.tipo === 'codigo') {
@@ -1744,6 +1891,7 @@
     await Fila.iniciar({
       servidor: Servidor,
       aoMudar: () => { if (S.tela === 'inicio') { renderFila(); renderEnviados(); renderToquesFila(); } },
+      aoAbrir: aoAbrirOS,
       aoEnviar: feito => toast(feito.erroEmail ? tx('O.S. {os} enviada, mas o e-mail falhou.', { os: feito.os }) : tx('O.S. {os} enviada.', { os: feito.os }))
     });
     await Relogio.iniciarModulo({
@@ -1828,4 +1976,4 @@
   prepararAssinaturas();
   iniciar();
 })();
-// -------- rat.js v9 --------
+// -------- rat.js v10 --------

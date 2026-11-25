@@ -1,4 +1,4 @@
-/* -------- rat.css v6 -------- */
+/* -------- rat.css v7 -------- */
 /* ═══════════════════════════════════════════════════════════════
    ASSISTÊNCIA TÉCNICA — estilo
 
@@ -75,6 +75,7 @@ body.carregando .topo::after {           /* sinal discreto de "buscando dados" *
   padding-inline: max(16px, env(safe-area-inset-left)) max(16px, env(safe-area-inset-right));
 }
 .titulo { font-size: var(--fs-1); font-weight: 500; margin: 22px 0 10px; }
+.titulo--secao { font-size: var(--fs-0, 0.95rem); color: var(--k-muted); margin: 18px 0 8px; }
 .tela > .titulo:first-child, .voltar + .titulo { margin-top: 4px; }
 
 .cartao {
@@ -434,4 +435,4 @@ body.sem-rolagem { overflow: hidden; }
   background: var(--k-grape); color: var(--k-white); font-size: var(--fs-3);
   box-shadow: 0 16px 48px rgba(44, 17, 45, .16);
 }
-/* -------- rat.css v6 -------- */
+/* -------- rat.css v7 -------- */

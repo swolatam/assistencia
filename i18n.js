@@ -1,4 +1,4 @@
-// -------- i18n.js v1 --------
+// -------- i18n.js v2 --------
 /* ═══════════════════════════════════════════════════════════════
    IDIOMA DA TELA (português do Brasil e espanhol)
 
@@ -105,7 +105,6 @@ window.I18n = (function () {
       '¿Descartar el informe de la OS {os}? Lo digitado y firmado se borrará.',
     ' Os horários marcados no relógio continuam na planilha.': ' Los horarios marcados en el reloj siguen en la planilla.',
     'Carregando as O.S.…': 'Cargando las OS…',
-    'Nenhuma O.S. na lista. Use o botão abaixo para digitar.': 'Ninguna OS en la lista. Use el botón de abajo para digitarla.',
     'Nada encontrado com esse termo. Se a O.S. já foi encerrada, digite o número dela.':
       'No se encontró nada con ese término. Si la OS ya fue cerrada, escriba su número.',
     'Nenhuma O.S. em aberto. Para um segundo atendimento, digite o número da O.S. na busca.':
@@ -342,7 +341,6 @@ window.I18n = (function () {
     'Buscar O.S., cliente ou série': 'Buscar OS, cliente o serie',
     'Buscar O.S., cliente, série…': 'Buscar OS, cliente, serie…',
     'Aparecem as O.S. em aberto. Segundo atendimento? Digite o número da O.S.': 'Aparecen las OS abiertas. ¿Segunda atención? Escriba el número de la OS.',
-    'Não achou? Digitar a O.S.': '¿No la encontró? Digitar la OS',
     'Enviados deste celular': 'Enviados desde este celular',
     'Zerar os dados deste celular': 'Borrar los datos de este celular',
     '‹ Início · o rascunho fica guardado': '‹ Inicio · el borrador queda guardado',
@@ -372,7 +370,35 @@ window.I18n = (function () {
     'Área para o responsável do cliente assinar com o dedo': 'Área para que el responsable del cliente firme con el dedo',
     'Voltar ao início': 'Volver al inicio',
     'Pronto': 'Listo',
-    'Erro no aplicativo': 'Error en la aplicación'
+    'Erro no aplicativo': 'Error en la aplicación',
+    'Nenhuma O.S. na lista. Use o botão abaixo para abrir uma O.S. nova.': 'Ninguna OS en la lista. Use el botón de abajo para abrir una OS nueva.',
+    'Não achou? Abrir O.S. nova': '¿No la encontró? Abrir OS nueva',
+    'O.S. de outros técnicos': 'OS de otros técnicos',
+    'Com {nomes}': 'Con {nomes}',
+    'ninguém ainda': 'nadie aún',
+    'Esperando o número da O.S. · pode trabalhar normalmente': 'Esperando el número de la OS · puede trabajar normalmente',
+    'A O.S. ainda não tem número de verdade (o NewSimova dá o número quando houver sinal). O relatório e as assinaturas estão guardados e saem sozinhos, com o número certo, assim que ele chegar.': 'La OS aún no tiene número definitivo (el NewSimova lo da cuando haya señal). El informe y las firmas están guardados y salen solos, con el número correcto, apenas llegue.',
+    'pedido de O.S. nova que ainda não recebeu o número': 'pedido de OS nueva que aún no recibió el número',
+    'pedidos de O.S. nova que ainda não receberam o número': 'pedidos de OS nueva que aún no recibieron el número',
+    'Ainda não baixei a lista de clientes. Abra o app com sinal uma vez para poder abrir O.S.': 'Aún no descargué la lista de clientes. Abra la app con señal una vez para poder abrir OS.',
+    'Abrir O.S. nova': 'Abrir OS nueva',
+    'A O.S. nasce como Solicitada; o gestor confere e programa.': 'La OS nace como Solicitada; el gestor la revisa y la programa.',
+    'Comece a digitar o nome': 'Empiece a escribir el nombre',
+    'Local': 'Lugar',
+    '(não sei)': '(no sé)',
+    'Tipo de serviço': 'Tipo de servicio',
+    'O que vai fazer': 'Qué va a hacer',
+    'Série da máquina (se souber)': 'Serie de la máquina (si la sabe)',
+    'Abrir O.S.': 'Abrir OS',
+    'Abrindo…': 'Abriendo…',
+    'Escolha o cliente da lista.': 'Elija el cliente de la lista.',
+    'Descreva o que vai fazer (poucas palavras bastam).': 'Describa lo que va a hacer (bastan pocas palabras).',
+    'O.S. {os} aberta.': 'OS {os} abierta.',
+    'Sem sinal: a O.S. recebe o número quando o sinal voltar. Pode trabalhar normalmente.': 'Sin señal: la OS recibe el número cuando vuelva la señal. Puede trabajar normalmente.',
+    'A O.S. {de} agora é a {para}.': 'La OS {de} ahora es la {para}.',
+    'Relógio da O.S.: ': 'Reloj de la OS: ',
+    'Aguardando o número da O.S.': 'Esperando el número de la OS',
+    'pedido {quando}': 'pedido {quando}',
   };
 
   const DICIONARIOS = { ES };
@@ -458,4 +484,4 @@ window.I18n = (function () {
     dicionario: () => ES
   };
 })();
-// -------- i18n.js v1 --------
+// -------- i18n.js v2 --------

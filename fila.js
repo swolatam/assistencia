@@ -1,4 +1,4 @@
-// -------- fila.js v2 --------
+// -------- fila.js v3 --------
 /* ═══════════════════════════════════════════════════════════════
    FILA DE ENVIO — relatório fechado e toque do relógio saem daqui,
    com ou sem sinal
@@ -8,7 +8,13 @@
    sozinho quando a conexão volta; o técnico não precisa ficar
    tocando em "enviar".
 
-   Dois tipos de item, na ordem em que nasceram:
+   Três tipos de item, na ordem em que nasceram:
+     abertura   pedido de O.S. nova (Servidor.abrirOS). O número de verdade
+                só o NewSimova dá; até ele voltar, a O.S. vive no celular
+                com um número provisório NOVA-xxxxx. Quando o número chega,
+                todos os itens com o provisório passam para o de verdade
+                (renomearOs). Enquanto não chega, os toques e o relatório
+                dessa O.S. ESPERAM aqui: PDF e apontamento com NOVA- nunca saem.
      relatorio  o relatório fechado (Servidor.finalizar)
      toque      um toque do relógio da O.S. (Servidor.apontar), que vai
                 para a aba Apontamentos. Leva a hora do celular no
@@ -44,6 +50,7 @@ window.Fila = (function () {
   let servidor = null;
   let aoMudar = () => {};  // algo mudou: a tela redesenha
   let aoEnviar = () => {}; // um item saiu sem o técnico estar olhando
+  let aoAbrir = () => {};  // um pedido de O.S. nova voltou com o número: { de, para }
 
   // Um envio de cada vez: dois ao mesmo tempo poderiam mandar o mesmo item.
   let corrente = Promise.resolve();
@@ -61,6 +68,7 @@ window.Fila = (function () {
     servidor = opcoes.servidor;
     aoMudar  = opcoes.aoMudar  || aoMudar;
     aoEnviar = opcoes.aoEnviar || aoEnviar;
+    aoAbrir  = opcoes.aoAbrir  || aoAbrir;
     itens = (await Armazem.fila.todos()).sort((a, b) => a.criadoEm - b.criadoEm);
     enviados = (await Armazem.pref.ler('enviados')) || [];
 
@@ -92,6 +100,29 @@ window.Fila = (function () {
   }
 
   const ehToque = item => item.tipo === 'toque';
+  const ehAbertura = item => item.tipo === 'abertura';
+  const ehProvisorio = os => /^NOVA-/i.test(String(os || '').trim());
+  // toque ou relatório de uma O.S. que ainda não tem número de verdade: espera
+  const esperaNumero = item => !ehAbertura(item) && ehProvisorio(item.envio && item.envio.os);
+  const MSG_ESPERA = 'Aguardando o número da O.S.';
+
+  // O pedido de O.S. nova entra na fila já com os dados do que o técnico digitou.
+  async function porAbertura(pedido) {
+    const item = await por(Object.assign({}, pedido, { os: pedido.id, pedido: pedido.id }), 'abertura');
+    tentar(true);
+    return item;
+  }
+
+  // O número chegou: tudo o que esperava pelo provisório passa para o de verdade.
+  // Muda na memória na hora (o laço de envio já enxerga) e grava depois.
+  function renomearOs(de, para) {
+    itens.forEach(i => {
+      if (!i.envio || String(i.envio.os) !== de || ehAbertura(i)) return;
+      i.envio.os = para;
+      if (i.ultimoErro === MSG_ESPERA) i.ultimoErro = '';
+      Armazem.fila.gravar(semFlags(i)).catch(() => { /* fica só na memória */ });
+    });
+  }
   const semConexao = e => !!(e && (e.rede || e.tipo === 'login')) || navigator.onLine === false;
 
   // Devolve a resposta do servidor, ou null se não foi (o item fica na
@@ -103,7 +134,8 @@ window.Fila = (function () {
     let res;
     try {
       const envio = JSON.parse(JSON.stringify(item.envio));
-      res = ehToque(item)
+      res = ehAbertura(item) ? await servidor.abrirOS(envio)
+        : ehToque(item)
         ? await servidor.apontar(Object.assign(envio, { enviadoEm: Date.now() }))
         : await servidor.finalizar(envio);
     } catch (e) {
@@ -121,6 +153,12 @@ window.Fila = (function () {
     // servidor responde "repetido".
     itens = itens.filter(i => i !== item);
     try { await Armazem.fila.apagar(item.id); } catch (e) { /* idem */ }
+    if (ehAbertura(item)) {
+      const de = item.envio.id, para = String(res && res.id || '');
+      if (para) { renomearOs(de, para); aoAbrir({ de, para }); }
+      aoMudar();
+      return { toque: true };   // não entra em "enviados" nem avisa como relatório
+    }
     if (ehToque(item)) { aoMudar(); return { toque: true }; }
     const feito = {
       id: item.id, os: item.envio.os, cliente: item.envio.cliente,
@@ -142,6 +180,10 @@ window.Fila = (function () {
       tentativaMarcada = false;
       for (const item of itens.slice()) {
         if (navigator.onLine === false) break;
+        if (esperaNumero(item)) {
+          if (item.ultimoErro !== MSG_ESPERA) { item.ultimoErro = MSG_ESPERA; aoMudar(); }
+          continue;
+        }
         if (!forcar && item.proximaEm > Date.now()) continue;
         const feito = await enviarUm(item);
         if (feito && !feito.toque) aoEnviar(feito);
@@ -155,6 +197,7 @@ window.Fila = (function () {
   function enviarAgora(id) {
     return emSerie(async () => {
       const item = itens.find(i => i.id === id);
+      if (item && esperaNumero(item)) { item.ultimoErro = MSG_ESPERA; aoMudar(); return null; }
       return item ? enviarUm(item) : (enviados.find(e => e.id === id) || null);
     });
   }
@@ -163,11 +206,15 @@ window.Fila = (function () {
     iniciar,
     por,
     porToque,
+    porAbertura,
+    renomearOs,
+    ehProvisorio,
     tentar,
     enviarAgora,
-    lista:    () => itens.filter(i => !ehToque(i)),   // relatórios esperando
+    lista:    () => itens.filter(i => !ehToque(i)),   // relatórios e pedidos de O.S. esperando
+    aberturas: () => itens.filter(ehAbertura),        // pedidos de O.S. nova esperando o número
     toques:   () => itens.filter(ehToque),            // toques do relógio esperando
     enviados: () => enviados.slice()
   };
 })();
-// -------- fila.js v2 --------
+// -------- fila.js v3 --------

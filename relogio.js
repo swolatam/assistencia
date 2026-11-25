@@ -1,4 +1,4 @@
-// -------- relogio.js v3 --------
+// -------- relogio.js v4 --------
 /* ═══════════════════════════════════════════════════════════════
    RELÓGIO DA O.S. — as horas de serviço, marcadas no celular
 
@@ -315,6 +315,17 @@ window.Relogio = (function () {
     if (mudou) aoMudar();
   }
 
+  /* O número de verdade da O.S. chegou (era NOVA-xxxxx): o relógio, e o que ele guarda da
+     O.S., passam a usar o número novo. Os toques que esperavam na fila mudam em Fila.renomearOs. */
+  async function renomearOs(de, para) {
+    for (const r of relogios.filter(x => x.os === de)) {
+      r.os = para;
+      if (r.ordem) r.ordem.os = para;
+      await Armazem.relogios.gravar(r);
+    }
+    aoMudar();
+  }
+
   async function iniciarModulo(opcoes) {
     fila = opcoes.fila;
     aoMudar = opcoes.aoMudar || aoMudar;
@@ -340,6 +351,7 @@ window.Relogio = (function () {
     incluir,
     lancarPorFora,
     arquivar,
+    renomearOs,
     // o que a tela mostra
     mesclar,
     atual:      () => { const a = ativo(); return a ? resumo(a) : null; },
@@ -353,4 +365,4 @@ window.Relogio = (function () {
     ordem:      id => { const r = relogios.find(x => x.id === id); return r ? Object.assign({}, r.ordem) : null; }
   };
 })();
-// -------- relogio.js v3 --------
+// -------- relogio.js v4 --------
